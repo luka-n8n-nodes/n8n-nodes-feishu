@@ -3,7 +3,7 @@ import { ICredentialType, INodeProperties } from 'n8n-workflow';
 // eslint-disable-next-line n8n-nodes-base/cred-class-name-missing-oauth2-suffix
 export class FeishuOauth2Api implements ICredentialType {
 	// eslint-disable-next-line n8n-nodes-base/cred-class-field-name-missing-oauth2
-	name = 'feishuPowerByLukaCatOauth2Api';
+	name = 'feishuNodeOauth2Api';
 
 	extends = ['oAuth2Api'];
 

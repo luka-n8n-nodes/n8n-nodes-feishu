@@ -11,6 +11,6 @@ export declare const enum OutputType {
  * 凭证类型枚举
  */
 export declare const enum Credentials {
-	FeishuCredentialsApi = 'feishuCredentialsApi',
-	FeishuOauth2Api = 'feishuOauth2Api',
+	FeishuCredentialsApi = 'feishuNodeCredentialsApi',
+	FeishuOauth2Api = 'feishuNodeOauth2Api',
 }

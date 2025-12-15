@@ -8,7 +8,7 @@ import {
 } from 'n8n-workflow';
 
 export class FeishuCredentialsApi implements ICredentialType {
-	name = 'feishuPowerByLukaCatCredentialsApi';
+	name = 'feishuNodeCredentialsApi';
 	displayName = '飞书租户维度 API';
 	icon = 'file:icon.svg' as const;
 	properties: INodeProperties[] = [
