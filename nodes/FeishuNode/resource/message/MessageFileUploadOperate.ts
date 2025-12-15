@@ -11,6 +11,7 @@ const MessageFileUploadOperate: ResourceOperations = {
 			displayName: '文件类型',
 			name: 'file_type',
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-options-type-unsorted-items
 			options: [
 				{
 					name: 'OPUS 音频文件',

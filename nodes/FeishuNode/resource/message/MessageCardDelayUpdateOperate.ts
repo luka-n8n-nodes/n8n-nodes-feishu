@@ -20,6 +20,9 @@ const MessageCardDelayUpdateOperate: ResourceOperations = {
 			displayName: 'Token',
 			name: 'token',
 			type: 'string',
+			typeOptions: {
+				password: true,
+			},
 			required: true,
 			default: '',
 			description: '卡片回传交互回调中包含的 token 参数值',

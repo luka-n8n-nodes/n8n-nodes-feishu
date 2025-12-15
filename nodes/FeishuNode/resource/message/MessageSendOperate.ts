@@ -20,6 +20,7 @@ const MessageSendOperate: ResourceOperations = {
 			displayName: '用户ID类型',
 			name: 'receive_id_type',
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-options-type-unsorted-items
 			options: [
 				{
 					name: 'Open ID',
@@ -65,6 +66,7 @@ const MessageSendOperate: ResourceOperations = {
 			displayName: '消息类型',
 			name: 'msg_type',
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-options-type-unsorted-items
 			options: [
 				{ name: '文本', value: 'text' },
 				{ name: '富文本', value: 'post' },

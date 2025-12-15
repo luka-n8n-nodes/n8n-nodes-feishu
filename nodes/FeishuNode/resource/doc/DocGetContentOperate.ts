@@ -12,6 +12,9 @@ const DocGetContentOperate: ResourceOperations = {
 			displayName: '文档 Token',
 			name: 'doc_token',
 			type: 'string',
+			typeOptions: {
+				password: true,
+			},
 			required: true,
 			default: '',
 			description: '云文档的唯一标识，长度 22 ~ 27 字符',
@@ -23,13 +26,12 @@ const DocGetContentOperate: ResourceOperations = {
 			required: true,
 			default: 'docx',
 			options: [
-				{
-					name: 'Docx (新版文档)',
-					value: 'docx',
-				},
-			],
-			description: '云文档类型',
-		},
+			{
+				name: 'Docx (新版文档)',
+				value: 'docx',
+			},
+		],
+	},
 		{
 			displayName: '内容类型',
 			name: 'content_type',
@@ -37,14 +39,13 @@ const DocGetContentOperate: ResourceOperations = {
 			required: true,
 			default: 'markdown',
 			options: [
-				{
-					name: 'Markdown',
-					value: 'markdown',
-					description: 'Markdown 格式',
-				},
-			],
-			description: '内容类型',
-		},
+			{
+				name: 'Markdown',
+				value: 'markdown',
+				description: 'Markdown 格式',
+			},
+		],
+	},
 		{
 			displayName: '语言',
 			name: 'lang',

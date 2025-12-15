@@ -29,7 +29,6 @@ const MessageEphemeralSendOperate: ResourceOperations = {
 			displayName: '用户ID类型',
 			name: 'user_id_type',
 			type: 'options',
-			// eslint-disable-next-line n8n-nodes-base/node-param-options-type-unsorted-items
 			options: [
 				{
 					name: 'Open ID',

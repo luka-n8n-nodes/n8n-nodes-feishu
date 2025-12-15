@@ -34,7 +34,7 @@ const ChatSearchOperate: ResourceOperations = {
 			displayName: 'Limit',
 			name: 'limit',
 			type: 'number',
-			default: 20,
+			default: 50,
 			typeOptions: {
 				minValue: 1,
 				maxValue: 100,

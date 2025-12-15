@@ -11,6 +11,7 @@ const MessageBatchSendOperate: ResourceOperations = {
 			displayName: '消息类型',
 			name: 'msg_type',
 			type: 'options',
+			// eslint-disable-next-line n8n-nodes-base/node-param-options-type-unsorted-items
 			options: [
 				{ name: '文本', value: 'text' },
 				{ name: '富文本', value: 'post' },
@@ -18,7 +19,6 @@ const MessageBatchSendOperate: ResourceOperations = {
 				{ name: '分享群名片', value: 'share_chat' },
 				{ name: '卡片', value: 'interactive' },
 			],
-			description: '消息类型',
 			required: true,
 			default: 'text',
 		},
