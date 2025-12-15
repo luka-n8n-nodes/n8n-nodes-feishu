@@ -3,6 +3,7 @@ import {
 	IAdditionalCredentialOptions,
 	IOAuth2Options,
 } from 'n8n-workflow/dist/esm/interfaces';
+import { Credentials } from '../type/enums';
 
 class RequestUtils {
 	static async originRequest(
@@ -14,7 +15,7 @@ class RequestUtils {
 
 		let additionalCredentialOptions = {} as IAdditionalCredentialOptions
 
-		if (authentication === 'feishuCredentialsApi') {
+		if (authentication === Credentials.FeishuCredentialsApi) {
 			const credentials = await this.getCredentials(authentication);
 
 			console.log('credentials.accessToken', credentials.accessToken);
@@ -30,7 +31,7 @@ class RequestUtils {
 					},
 				},
 			};
-		} else if (authentication === 'feishuOauth2Api') {
+		} else if (authentication === Credentials.FeishuOauth2Api) {
 
 			options.baseURL = `https://open.feishu.cn`;
 

@@ -7,7 +7,7 @@ import {
 	INodeProperties,
 } from 'n8n-workflow';
 
-export class FeishuCredentialsApi implements ICredentialType {
+export class FeishuNodeCredentialsApi implements ICredentialType {
 	name = 'feishuNodeCredentialsApi';
 	displayName = '飞书租户维度 API';
 	icon = 'file:icon.svg' as const;

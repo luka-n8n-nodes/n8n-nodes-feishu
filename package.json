@@ -41,8 +41,8 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/FeishuCredentialsApi.credentials.js",
-      "dist/credentials/FeishuOauth2Api.credentials.js"
+      "dist/credentials/FeishuNodeCredentialsApi.credentials.js",
+      "dist/credentials/FeishuNodeOauth2Api.credentials.js"
     ],
     "nodes": [
       "dist/nodes/FeishuNode/FeishuNode.node.js"
