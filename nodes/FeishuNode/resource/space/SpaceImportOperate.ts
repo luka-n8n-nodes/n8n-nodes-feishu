@@ -35,7 +35,7 @@ const JOB_ERROR_MESSAGES: Record<number, string> = {
 const SpaceImportOperate: ResourceOperations = {
 	name: '导入文件',
 	value: 'space:import',
-	order: 55,
+	order: 110,
 	description:
 		'导入文件指将本地文件如 Word、TXT、Markdown、Excel 等格式的文件导入为某种格式的云文档，如在线文档、电子表格、多维表格等，并放置到云空间指定目录中。参考<a href="https://open.feishu.cn/document/server-docs/docs/drive-v1/import_task/import-user-guide">详细文档</a>',
 	options: [

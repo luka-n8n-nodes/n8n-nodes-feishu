@@ -59,7 +59,7 @@ async function runWithConcurrency<T>(
 const SpaceMediaChunkUploadOperate: ResourceOperations = {
 	name: '分片上传素材',
 	value: 'space:mediaChunkUpload',
-	order: 15,
+	order: 140,
 	description: '当上传的文件大于 20MB 时使用。将文件、图片、视频等素材分片上传到指定云文档中。平台固定以 4MB 的大小对素材进行分片。',
 	options: [
 		{

@@ -12,7 +12,7 @@ import {
 const SpaceDownloadOperate: ResourceOperations = {
 	name: '下载素材',
 	value: 'space:mediaDownload',
-	order: 15,
+	order: 160,
 	description: '下载各类云文档中的素材，例如电子表格中的图片',
 	options: [
 		{

@@ -59,7 +59,7 @@ async function runWithConcurrency<T>(
 const SpaceChunkUploadOperate: ResourceOperations = {
 	name: '分片上传文件',
 	value: 'space:chunkUpload',
-	order: 70,
+	order: 90,
 	description: '将指定文件上传至云空间指定目录中，支持上传大于20MB的文件',
 	options: [
 		{

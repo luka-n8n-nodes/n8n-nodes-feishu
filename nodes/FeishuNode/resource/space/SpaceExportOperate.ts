@@ -45,7 +45,7 @@ const JOB_ERROR_MESSAGES: Record<number, string> = {
 const SpaceExportOperate: ResourceOperations = {
 	name: '导出云文档',
 	value: 'space:export',
-	order: 50,
+	order: 120,
 	description: '导出云文档指将飞书文档、电子表格、多维表格导出为本地文件，包括 Word、Excel、PDF、CSV 格式',
 	options: [
 		{

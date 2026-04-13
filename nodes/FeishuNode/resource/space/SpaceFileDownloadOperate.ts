@@ -12,7 +12,7 @@ import {
 const SpaceFileDownloadOperate: ResourceOperations = {
 	name: '下载文件',
 	value: 'space:fileDownload',
-	order: 80,
+	order: 100,
 	description: '下载云空间中的文件，如 PDF 文件。不包含飞书文档、电子表格以及多维表格等在线文档',
 	options: [
 		{

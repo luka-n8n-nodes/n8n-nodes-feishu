@@ -6,7 +6,7 @@ import { batchingOption, timeoutOption } from '../../../help/utils/sharedOptions
 const SpaceSubscribeOperate: ResourceOperations = {
 	name: '订阅云文档事件',
 	value: 'space:subscribe',
-	order: 30,
+	order: 170,
 	description: '订阅云文档的各类通知事件。调用该接口并在开发者后台添加事件后，当云文档发生指定事件时，系统会向配置的地址发送事件。',
 	options: [
 		{

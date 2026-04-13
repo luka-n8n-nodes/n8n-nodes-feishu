@@ -13,7 +13,7 @@ import {
 export default {
 	name: '上传素材',
 	value: 'space:upload',
-	order: 10,
+	order: 130,
 	description: '将文件、图片、视频等素材上传到指定云文档中。素材将显示在对应云文档中，在云空间中不会显示。文件大小不得超过 20 MB',
 	options: [
 		{

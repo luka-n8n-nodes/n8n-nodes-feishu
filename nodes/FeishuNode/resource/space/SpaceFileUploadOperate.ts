@@ -13,7 +13,7 @@ import {
 const SpaceFileUploadOperate: ResourceOperations = {
 	name: '上传文件',
 	value: 'space:fileUpload',
-	order: 60,
+	order: 80,
 	description: '上传文件指将本地环境的各类文件上传至云空间中，文件大小不超过20MB',
 	options: [
 		{

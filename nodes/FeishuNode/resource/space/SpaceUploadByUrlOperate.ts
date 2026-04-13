@@ -10,7 +10,7 @@ import {
 export default {
 	name: '上传素材通过Url',
 	value: 'space:uploadByUrl',
-	order: 20,
+	order: 150,
 	description: '通过文件链接将文件、图片、视频等素材上传到指定云文档中。素材将显示在对应云文档中，在云空间中不会显示',
 	options: [
 		{
