@@ -28,7 +28,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "n8n-node build",
+    "build": "n8n-node build && node scripts/copy-proto.js",
     "dev": "n8n-node dev",
     "format": "prettier credentials nodes --write",
     "lint": "n8n-node lint",
