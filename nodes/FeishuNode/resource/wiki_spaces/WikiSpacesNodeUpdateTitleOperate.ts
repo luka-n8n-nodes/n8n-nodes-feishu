@@ -18,8 +18,8 @@ const WikiSpacesNodeUpdateTitleOperate: ResourceOperations = {
 		{
 			displayName: '节点Token',
 			name: 'node_token',
+			// eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing
 			type: 'string',
-			typeOptions: { password: true },
 			required: true,
 			default: '',
 		},

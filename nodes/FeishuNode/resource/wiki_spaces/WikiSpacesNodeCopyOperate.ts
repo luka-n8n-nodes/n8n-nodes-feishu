@@ -18,16 +18,16 @@ const WikiSpacesNodeCopyOperate: ResourceOperations = {
 		{
 			displayName: '节点Token',
 			name: 'node_token',
+			// eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing
 			type: 'string',
-			typeOptions: { password: true },
 			required: true,
 			default: '',
 		},
 		{
 			displayName: '目标父节点Token',
 			name: 'target_parent_token',
+			// eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing
 			type: 'string',
-			typeOptions: { password: true },
 			default: '',
 			description: '目标父节点Token，与目标知识空间ID不可同时为空',
 		},

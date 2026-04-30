@@ -18,16 +18,16 @@ const WikiSpacesNodeMoveOperate: ResourceOperations = {
 		{
 			displayName: '需要迁移的节点Token',
 			name: 'node_token',
+			// eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing
 			type: 'string',
-			typeOptions: { password: true },
 			required: true,
 			default: '',
 		},
 		{
 			displayName: '目标父节点Token',
 			name: 'target_parent_token',
+			// eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing
 			type: 'string',
-			typeOptions: { password: true },
 			default: '',
 			description: '移动到的父节点token',
 		},
