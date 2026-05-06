@@ -40,25 +40,44 @@ const ChatUpdateOperate: ResourceOperations = {
 		},
 		// ===== 请求体参数 =====
 		{
-			displayName: '群头像 Image Key',
-			name: 'avatar',
-			type: 'string',
-			default: '',
-			description: '群头像对应的 Image Key，可通过上传图片接口获取。',
-		},
-		{
-			displayName: '群名称',
-			name: 'name',
-			type: 'string',
-			default: '',
-			description: '群名称。最大长度: 100 字符。',
-		},
-		{
-			displayName: '群描述',
-			name: 'description',
-			type: 'string',
-			default: '',
-			description: '群描述。最大长度: 500 字符。',
+			displayName: 'Update Fields',
+			name: 'update_fields',
+			type: 'collection',
+			placeholder: 'Add Field',
+			default: {},
+			description:
+				'需要更新的字段。仅在此处添加的字段会被更新：未添加 = 不修改；添加并留空 = 清空该字段；添加并填值 = 更新为该值。',
+			options: [
+				{
+					displayName: '群头像 Image Key',
+					name: 'avatar',
+					type: 'string',
+					default: '',
+					description: '群头像对应的 Image Key，可通过上传图片接口获取。留空则清空头像。',
+				},
+				{
+					displayName: '群名称',
+					name: 'name',
+					type: 'string',
+					default: '',
+					description: '群名称。最大长度: 100 字符。留空则清空名称。',
+				},
+				{
+					displayName: '群描述',
+					name: 'description',
+					type: 'string',
+					default: '',
+					description: '群描述。最大长度: 500 字符。留空则清空描述。',
+				},
+				{
+					displayName: '群主 ID',
+					name: 'owner_id',
+					type: 'string',
+					default: '',
+					description:
+						'群主 ID。ID 类型与 user_id_type 的取值保持一致。转让群主时需要填写此字段。留空则清空群主。',
+				},
+			],
 		},
 		{
 			displayName: '群消息形式',
@@ -83,14 +102,6 @@ const ChatUpdateOperate: ResourceOperations = {
 			],
 			default: '',
 			description: '群类型。private: 私有群。public: 公开群。',
-		},
-		{
-			displayName: '群主 ID',
-			name: 'owner_id',
-			type: 'string',
-			default: '',
-			description:
-				'群主 ID。ID 类型与 user_id_type 的取值保持一致。转让群主时需要填写此字段。',
 		},
 		{
 			displayName: '发言权限',
@@ -203,12 +214,10 @@ const ChatUpdateOperate: ResourceOperations = {
 		const user_id_type = this.getNodeParameter('user_id_type', index, 'open_id') as string;
 
 		// 获取请求体参数
-		const avatar = this.getNodeParameter('avatar', index, '') as string;
-		const name = this.getNodeParameter('name', index, '') as string;
-		const description = this.getNodeParameter('description', index, '') as string;
+		// update_fields 中的字段：用户添加哪个就更新哪个；留空则清空对应字段
+		const updateFields = this.getNodeParameter('update_fields', index, {}) as IDataObject;
 		const group_message_type = this.getNodeParameter('group_message_type', index, '') as string;
 		const chat_type = this.getNodeParameter('chat_type', index, '') as string;
-		const owner_id = this.getNodeParameter('owner_id', index, '') as string;
 		const add_member_permission = this.getNodeParameter(
 			'add_member_permission',
 			index,
@@ -242,17 +251,16 @@ const ChatUpdateOperate: ResourceOperations = {
 			user_id_type,
 		};
 
-		// 构建请求体（只添加非空的参数）
+		// 构建请求体
+		// - update_fields：用户主动添加的字段才会更新（含留空清空语义），优先级高于 extObject
+		// - 选项字段（group_message_type/chat_type/...）：'' 视为"不修改"，跳过
 		const body: IDataObject = {
 			...extObject,
+			...updateFields,
 		};
 
-		if (avatar) body.avatar = avatar;
-		if (name) body.name = name;
-		if (description) body.description = description;
 		if (group_message_type) body.group_message_type = group_message_type;
 		if (chat_type) body.chat_type = chat_type;
-		if (owner_id) body.owner_id = owner_id;
 		if (add_member_permission) body.add_member_permission = add_member_permission;
 		if (share_card_permission) body.share_card_permission = share_card_permission;
 		if (at_all_permission) body.at_all_permission = at_all_permission;
