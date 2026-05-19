@@ -36,13 +36,13 @@ jobs:
     steps:
       # ===== 1. 环境准备 =====
       - name: 📥 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🔧 设置 Node.js 环境
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
@@ -173,7 +173,7 @@ jobs:
       # ===== 6. 创建 GitHub Release =====
       - name: 🎊 创建 GitHub Release
         if: github.event.inputs.dry_run != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.NEW_VERSION }}
           name: Release ${{ env.NEW_VERSION }}
