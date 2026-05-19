@@ -7,7 +7,7 @@ import {
 } from 'n8n-workflow';
 import RequestUtils from '../../../help/utils/RequestUtils';
 import { ResourceOperations } from '../../../help/type/IResource';
-import { timeoutOption, paginationOptions } from '../../../help/utils/sharedOptions';
+import { commonOptions, paginationOptions } from '../../../help/utils/sharedOptions';
 
 const DepartmentUserListOperate: ResourceOperations = {
 	name: '获取部门直属用户列表',
@@ -53,14 +53,7 @@ const DepartmentUserListOperate: ResourceOperations = {
 			type: 'notice',
 			default: '',
 		},
-		{
-			displayName: 'Options',
-			name: 'options',
-			type: 'collection',
-			placeholder: 'Add option',
-			default: {},
-			options: [timeoutOption],
-		},
+		commonOptions,
 	] as INodeProperties[],
 	async call(this: IExecuteFunctions, index: number): Promise<IDataObject[]> {
 		const department_id = this.getNodeParameter('department_id', index) as string;
