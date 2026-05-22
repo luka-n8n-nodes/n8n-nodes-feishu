@@ -135,6 +135,13 @@ const DepartmentListChildrenOperate: ResourceOperations = {
 		};
 
 		// 将扁平数据转换为树形结构
+		// 飞书 API 返回的 parent_department_id 字段格式由 department_id_type 决定：
+		// - department_id_type=open_department_id 时，parent_department_id 是 open_department_id 格式
+		// - department_id_type=department_id 时，parent_department_id 是 department_id 格式
+		// 因此父子关联时必须使用相同类型的 ID 字段，否则匹配不上导致 children 为空。
+		const idField =
+			department_id_type === 'open_department_id' ? 'open_department_id' : 'department_id';
+
 		const convertToTree = (items: IDataObject[], parentId: string): IDataObject[] => {
 			const result: IDataObject[] = [];
 
@@ -142,7 +149,7 @@ const DepartmentListChildrenOperate: ResourceOperations = {
 				const itemParentId = item.parent_department_id as string;
 
 				if (itemParentId === parentId) {
-					const children = convertToTree(items, item.department_id as string);
+					const children = convertToTree(items, item[idField] as string);
 					const treeNode: IDataObject = {
 						...item,
 						children,
