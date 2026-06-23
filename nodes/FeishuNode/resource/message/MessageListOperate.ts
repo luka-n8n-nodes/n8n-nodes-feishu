@@ -87,7 +87,7 @@ const MessageListOperate: ResourceOperations = {
 			description: '消息排序方式。注意：使用 page_token 分页请求时，排序方式均与第一次请求一致，不支持中途改换排序方式。',
 		},
 		paginationOptions.returnAll,
-		paginationOptions.limit(50, 1, 20),
+		paginationOptions.limit(50, 1, 50),
 		commonOptions,
 	] as INodeProperties[],
 	async call(this: IExecuteFunctions, index: number): Promise<IDataObject[]> {
@@ -97,7 +97,7 @@ const MessageListOperate: ResourceOperations = {
 		const end_time = this.getNodeParameter('end_time', index, '') as string;
 		const sort_type = this.getNodeParameter('sort_type', index, 'ByCreateTimeAsc') as string;
 		const returnAll = this.getNodeParameter('returnAll', index, false) as boolean;
-		const limit = this.getNodeParameter('limit', index, 20) as number;
+		const limit = this.getNodeParameter('limit', index, 50) as number;
 		const options = this.getNodeParameter('options', index, {}) as {
 			timeout?: number;
 		};
