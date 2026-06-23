@@ -6,6 +6,7 @@ import {
 	INodeTypeDescription,
 	NodeConnectionTypes,
 	IDataObject,
+	IExecuteResponsePromiseData,
 	NodeOperationError,
 } from 'n8n-workflow';
 import { configuredOutputs } from '../help/utils/outputs';
@@ -95,6 +96,8 @@ export class RespondToFeishu implements INodeType {
 		const enableResponseOutput = this.getNodeParameter('enableResponseOutput', 0, false) as boolean;
 
 		const responseItems: INodeExecutionData[] = [];
+		// 第一个 item 的响应数据，用于通过 sendResponse 同步返回给飞书（与官方 Respond to Webhook 行为一致：只取第一个响应）
+		let firstResponseData: IDataObject | undefined;
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			const item = items[itemIndex];
@@ -120,15 +123,23 @@ export class RespondToFeishu implements INodeType {
 				}
 			}
 
-			// 构建带有特殊标记的响应输出项
-			// 这个标记用于让 FeishuNodeTrigger 从 IRun 执行结果中识别响应数据
-			// 支持多 Worker 模式：响应数据通过 n8n 的执行结果机制传递，而非进程内内存
+			if (firstResponseData === undefined) {
+				firstResponseData = responseData;
+			}
+
+			// 构建带有特殊标记的响应输出项（保持数据结构不变，供下游/调试使用）
 			responseItems.push({
 				json: {
 					[FEISHU_RESPONSE_KEY]: responseData,
 				},
 			});
 		}
+
+		// 通过 n8n 的 sendResponse 生命周期机制将响应同步返回给飞书 Trigger。
+		// 该机制与官方「Respond to Webhook」节点一致：在 queue mode（多 worker）/ 多主部署下，
+		// Worker 会通过 Redis 把响应路由回持有 WebSocket 连接的主实例，从而正确解析 Trigger 侧的 responsePromise。
+		// 在单实例模式下，sendResponse 钩子会被同进程直接触发。
+		this.sendResponse((firstResponseData ?? {}) as IExecuteResponsePromiseData);
 
 		// 清理输入数据（移除内部字段）
 		const cleanedItems = items.map((item) => {
@@ -140,7 +151,7 @@ export class RespondToFeishu implements INodeType {
 			};
 		});
 
-		// 根据是否启用响应输出分支返回不同的输出
+		// 根据是否启用响应输出分支返回不同的输出（保持原有数据结构不变）
 		if (enableResponseOutput) {
 			// 输出分支 1: Input Data（原始输入）
 			// 输出分支 2: Response（响应数据，包含特殊标记）
@@ -148,7 +159,6 @@ export class RespondToFeishu implements INodeType {
 		}
 
 		// 单输出：返回包含特殊标记的响应数据
-		// 注意：这里改为返回 responseItems，确保 Trigger 能从执行结果中提取响应
 		return [responseItems];
 	}
 }

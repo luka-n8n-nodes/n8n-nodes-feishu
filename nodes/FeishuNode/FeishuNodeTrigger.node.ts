@@ -5,14 +5,13 @@ import {
 	ITriggerResponse,
 	NodeConnectionTypes,
 	NodeOperationError,
-	IRun,
 	IDataObject,
+	IExecuteResponsePromiseData,
 } from 'n8n-workflow';
 import { Credentials } from '../help/type/enums';
 import { WSClient } from '../help/utils/feishu-sdk/ws-client';
 import { EventDispatcher } from '../help/utils/feishu-sdk/handler/event-handler';
 import { triggerEventProperty } from '../help/utils/properties';
-import { FEISHU_RESPONSE_KEY } from './RespondToFeishu.node';
 
 /**
  * 需要同步响应的事件类型集合
@@ -23,88 +22,6 @@ const SYNC_RESPONSE_EVENTS = new Set([
 	'url.preview.get',
 	'profile.view.get',
 ]);
-
-/**
- * 飞书响应提取结果
- */
-interface FeishuResponseResult {
-	/** 响应数据 */
-	response: IDataObject | null;
-	/** 是否检测到多个响应节点（用于发出警告） */
-	hasMultiple: boolean;
-	/** 第一个响应所在的节点名称 */
-	nodeName?: string;
-}
-
-/**
- * 从 IRun 执行结果中提取飞书响应数据
- * 遍历所有节点的输出，查找带有 customFeishuResponse 字段的响应
- *
- * 性能优化策略：
- * - 使用 for...in 代替 Object.keys() 避免中间数组分配
- * - 使用 in 操作符代替属性访问 + undefined 比较，减少属性查找开销
- * - 使用 labeled break 在找到第一个响应 + 确认是否有多个后立即退出全部循环
- * - 索引循环代替 for...of，避免迭代器开销
- *
- * 注意：
- * - 由于每次 emit() 触发独立的工作流执行，IRun 中只包含这次执行的结果
- * - 如果存在多个 RespondToFeishu 节点，只有第一个找到的响应会被使用（与 n8n Respond to Webhook 行为一致）
- *
- * @param run - 工作流执行结果
- * @returns 响应结果，包含响应数据、是否有多个响应、节点名称
- */
-function extractFeishuResponse(run: IRun): FeishuResponseResult {
-	const runData = run.data?.resultData?.runData;
-	if (!runData) {
-		return { response: null, hasMultiple: false };
-	}
-
-	let firstResponse: IDataObject | null = null;
-	let firstNodeName: string | undefined;
-	let hasMultiple = false;
-
-	// 使用 labeled break 实现四层循环的提前退出
-	// 只需找到第一个响应，以及是否存在第二个响应（用于警告）
-	outerLoop: for (const nodeName in runData) {
-		const nodeRunData = runData[nodeName];
-		if (!nodeRunData) continue;
-
-		// 每个节点可能有多次执行（例如循环中）
-		for (let t = 0; t < nodeRunData.length; t++) {
-			const outputs = nodeRunData[t].data?.main;
-			if (!outputs) continue;
-
-			// 遍历所有输出分支
-			for (let o = 0; o < outputs.length; o++) {
-				const outputItems = outputs[o];
-				if (!outputItems) continue;
-
-				// 遍历输出中的每个 item
-				for (let i = 0; i < outputItems.length; i++) {
-					const json = outputItems[i].json;
-
-					// 使用 in 操作符检查标记键是否存在（比属性访问 + undefined 比较更快）
-					if (json && FEISHU_RESPONSE_KEY in json) {
-						if (firstResponse === null) {
-							firstResponse = (json[FEISHU_RESPONSE_KEY] as IDataObject) || {};
-							firstNodeName = nodeName;
-						} else {
-							// 已找到第二个响应，标记后立即退出所有循环
-							hasMultiple = true;
-							break outerLoop;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return {
-		response: firstResponse,
-		hasMultiple,
-		nodeName: firstNodeName,
-	};
-}
 
 export class FeishuNodeTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -263,14 +180,9 @@ export class FeishuNodeTrigger implements INodeType {
 
 				// ── 以下仅处理需要同步响应的事件（card.action.trigger / url.preview.get / profile.view.get）──
 
-				const donePromise = this.helpers.createDeferredPromise<IRun>();
-				const eventId = data.event_id as string;
-				if (!eventId) {
-					this.logger.warn('飞书同步事件数据中未找到 event_id，响应模式可能无法正常工作');
-				}
-
+				// immediately 模式：触发工作流后立即响应，不等待执行结果
 				if (responseMode === 'immediately') {
-					this.emit([this.helpers.returnJsonArray(enrichedData)], undefined, donePromise);
+					this.emit([this.helpers.returnJsonArray(enrichedData)]);
 					if (callbackToast) {
 						return {
 							toast: {
@@ -282,21 +194,28 @@ export class FeishuNodeTrigger implements INodeType {
 					return {};
 				}
 
-				// responseNode 模式：等待工作流执行完成，从 IRun 结果中提取响应
-				if (!eventId) {
-					this.emit([this.helpers.returnJsonArray(enrichedData)], undefined, donePromise);
-					return {};
-				}
-
-				this.emit([this.helpers.returnJsonArray(enrichedData)], undefined, donePromise);
+				// responseNode 模式：通过 responsePromise + sendResponse 机制同步获取响应。
+				//
+				// 关键点（解决多主 + 多 worker + 多 webhook 下无法响应的问题）：
+				// - 这里把 responsePromise 作为 emit 的第 2 个参数传入，n8n 会将其注册到本次执行的响应通道。
+				// - 「飞书响应」节点执行时调用 this.sendResponse(...)，触发 sendResponse 生命周期钩子。
+				// - 在 queue mode 下，执行发生在 worker 进程，worker 会通过 Redis 把响应（respond-to-webhook 消息）
+				//   路由回持有 WebSocket 连接的主实例（leader），由 ScalingService 解析此 responsePromise。
+				// - 这与官方「Respond to Webhook」节点使用的是同一套跨进程机制，因此在分布式部署下可靠。
+				//
+				// 旧实现依赖 donePromise(IRun) 扫描节点输出中的标记，在 queue mode 下需要等待 worker 写库 +
+				// Redis 通知 + 主实例读库，既慢（容易超过飞书 3 秒限制）又可能拿不到完整 runData，导致响应丢失。
+				const responsePromise =
+					this.helpers.createDeferredPromise<IExecuteResponsePromiseData>();
+				this.emit([this.helpers.returnJsonArray(enrichedData)], responsePromise);
 
 				let timeoutId: ReturnType<typeof setTimeout> | undefined;
 				try {
-					const executionResult = await Promise.race([
-						donePromise.promise,
+					const response = await Promise.race([
+						responsePromise.promise,
 						new Promise<never>((_, reject) => {
 							timeoutId = setTimeout(
-								() => reject(new Error(`等待工作流执行超时 (${responseTimeout}ms)`)),
+								() => reject(new Error(`等待飞书响应节点超时 (${responseTimeout}ms)`)),
 								responseTimeout,
 							);
 						}),
@@ -304,34 +223,14 @@ export class FeishuNodeTrigger implements INodeType {
 
 					clearTimeout(timeoutId);
 
-					if (!executionResult?.data?.resultData?.runData) {
-						this.logger.warn(
-							`[飞书响应模式] IRun 结果结构不完整，可能在多 Worker 模式下存在问题`,
-						);
-					}
-
-					const { response, hasMultiple, nodeName } = extractFeishuResponse(executionResult);
-
-					if (hasMultiple) {
-						this.logger.warn(
-							`[飞书响应模式] 检测到多个飞书响应节点，只有第一个节点 "${nodeName}" 的响应会被使用。` +
-								`建议：工作流中只保留一个"飞书响应"节点，或确保只有一个分支会执行。`,
-						);
-					}
-
-					if (response) {
-						return response;
-					} else {
-						this.logger.warn(
-							`[飞书响应模式] 未在执行结果中找到飞书响应节点的输出。请确保工作流中包含"飞书响应"节点。`,
-						);
-						return {};
-					}
+					// response 即「飞书响应」节点通过 sendResponse 返回的数据（普通 JSON 对象）
+					return (response as IDataObject) ?? {};
 				} catch (error) {
 					clearTimeout(timeoutId);
 					const errorMessage = error instanceof Error ? error.message : String(error);
 					this.logger.warn(
-						`[飞书响应模式] 等待工作流执行超时或出错: ${errorMessage}，event_id: ${eventId}`,
+						`[飞书响应模式] 等待飞书响应节点超时或出错: ${errorMessage}。` +
+							`请确认工作流中包含"飞书响应"节点，且能在 ${responseTimeout}ms 内执行到该节点。`,
 					);
 					return {};
 				}
