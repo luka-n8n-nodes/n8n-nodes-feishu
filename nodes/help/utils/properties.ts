@@ -39,6 +39,11 @@ export const triggerEventProperty: INodeProperties = {
 			description: '当机器人收到用户发送的消息时触发',
 		},
 		{
+			name: '首次会话创建',
+			value: 'p2p_chat_create',
+			description: '用户和机器人的会话首次被创建时触发（v1.0 事件，仅首次触发一次）',
+		},
+		{
 			name: '新增消息表情回复',
 			value: 'im.message.reaction.created_v1',
 			description: '当消息被添加表情回复时触发',
