@@ -1,11 +1,20 @@
 import { Logger, RequestHelperFunctions } from 'n8n-workflow';
 
 import WebSocket from 'ws';
+import type { IncomingMessage } from 'http';
 import { EventDispatcher } from '../handler/event-handler';
 import * as protoBuf from '../proto-buf';
 import { WSConfig } from './ws-config';
 import { DataCache } from '../data-cache';
-import { Domain, ErrorCode, FrameType, HeaderKey, HttpStatusCode, MessageType } from '../enum';
+import {
+	ConnectFailReason,
+	Domain,
+	ErrorCode,
+	FrameType,
+	HeaderKey,
+	HttpStatusCode,
+	MessageType,
+} from '../enum';
 import { pbbp2 } from '../proto-buf/pbbp2';
 
 interface IConstructorParams {
@@ -17,6 +26,17 @@ interface IConstructorParams {
 	autoReconnect?: boolean;
 	agent?: any;
 }
+
+/** 单次连接尝试的结构化结果 */
+interface ConnectResult {
+	ok: boolean;
+	reason?: ConnectFailReason;
+}
+
+type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped';
+
+/** 指数退避的基础间隔（毫秒），首次重连从这里起步 */
+const BACKOFF_BASE_MS = 1000;
 
 export class WSClient {
 	private wsConfig = new WSConfig();
@@ -31,15 +51,36 @@ export class WSClient {
 
 	private pingInterval?: NodeJS.Timeout;
 
-	private reconnectInterval?: NodeJS.Timeout;
+	private reconnectTimer?: NodeJS.Timeout;
 
-	private isConnecting: boolean = false;
-
+	/**
+	 * 是否允许重连。仅在 stop() 时置为 false。
+	 * 取代旧的 isConnecting/shouldReconnect 隐式组合，避免竞态导致「断开后不再重连」。
+	 */
 	private shouldReconnect: boolean = true;
+
+	/**
+	 * 连接代际计数。每次 start()/stop() 递增，用于让「过期」的重连链路（定时器回调、
+	 * 尚未 resolve 的连接尝试）在恢复执行时自行退出，避免 issue #177 的并行无界重连。
+	 */
+	private generation: number = 0;
+
+	/** 当前是否有一次连接尝试正在进行，保证同一时刻只有一个 connectOnce 在跑 */
+	private connecting: boolean = false;
+
+	/** 连续重连失败次数，用于指数退避；连接成功后清零 */
+	private reconnectAttempt: number = 0;
+
+	/** 最近一次收到 pong 的时间戳，用于识别半开僵尸连接 */
+	private lastPongAt: number = 0;
+
+	private connectionState: ConnectionState = 'idle';
 
 	private reconnectInfo = {
 		lastConnectTime: 0,
 		nextConnectTime: 0,
+		attempt: 0,
+		lastPongAt: 0,
 	};
 
 	private agent?: any;
@@ -62,7 +103,7 @@ export class WSClient {
 		});
 	}
 
-	private async pullConnectConfig() {
+	private async pullConnectConfig(): Promise<ConnectResult> {
 		const { appId, appSecret } = this.wsConfig.getClient();
 
 		try {
@@ -80,19 +121,19 @@ export class WSClient {
 				timeout: 15000,
 			});
 
-			const {
-				code,
-				data: { URL: connectUrl, ClientConfig },
-				msg,
-			} = JSON.parse(response);
+			const { code, data, msg } = JSON.parse(response);
 
 			if (code !== ErrorCode.ok) {
-				this.logger.error(
-					`[FeishuNode:ws] code: ${code}, ${code === ErrorCode.system_busy ? msg : 'system busy'}`,
-				);
-				if (code === ErrorCode.system_busy || code === ErrorCode.internal_error) {
-					return false;
-				}
+				this.logger.error(`pull connect config failed, code: ${code}, msg: ${msg}`);
+				return { ok: false, reason: this.classifyCode(code) };
+			}
+
+			const connectUrl: string | undefined = data?.URL;
+			const ClientConfig = data?.ClientConfig;
+
+			if (!connectUrl || !ClientConfig) {
+				this.logger.error('pull connect config missing URL/ClientConfig');
+				return { ok: false, reason: ConnectFailReason.server_error };
 			}
 
 			const parsedUrl = new URL(connectUrl);
@@ -111,134 +152,249 @@ export class WSClient {
 				reconnectNonce: ClientConfig.ReconnectNonce * 1000,
 			});
 
-			this.logger.debug(`[FeishuNode:ws] get connect config success, ws url: ${connectUrl}`);
+			this.logger.debug(`get connect config success, ws url: ${connectUrl}`);
 
-			return true;
+			return { ok: true };
 		} catch (e) {
-			this.logger.error('[FeishuNode:ws]', (e as any)?.message || 'system busy');
-			return false;
+			this.logger.error('pull connect config error', (e as any)?.message || 'system busy');
+			return { ok: false, reason: ConnectFailReason.network };
 		}
 	}
 
-	private connect() {
+	/** 把飞书返回的 code 归类为重连策略需要的原因 */
+	private classifyCode(code: number): ConnectFailReason {
+		switch (code) {
+			case ErrorCode.exceed_conn_limit:
+				return ConnectFailReason.exceed_conn_limit;
+			case ErrorCode.auth_failed:
+				return ConnectFailReason.auth_failed;
+			case ErrorCode.forbidden:
+				return ConnectFailReason.forbidden;
+			case ErrorCode.system_busy:
+			case ErrorCode.internal_error:
+				return ConnectFailReason.system_busy;
+			default:
+				return ConnectFailReason.server_error;
+		}
+	}
+
+	/**
+	 * 建立 WebSocket 连接，并校验飞书握手结果。
+	 *
+	 * 关键修复：飞书网关在 upgrade 阶段用「非 101 响应头」返回握手结果，对应 ws 库的
+	 * `unexpected-response` 事件。旧实现只监听 open/error，导致握手被拒时仍误判为成功，
+	 * 进而出现「建连即断 → 重连 → 再被拒」的热循环。
+	 */
+	private connect(): Promise<ConnectResult> {
 		const connectUrl = this.wsConfig.getWS('connectUrl');
 
-		let wsInstance;
-
+		let wsInstance: WebSocket;
 		try {
 			const { agent } = this;
 			wsInstance = new WebSocket(connectUrl, { agent });
 		} catch (e) {
-			this.logger.error('[FeishuNode:ws] new WebSocket error');
+			this.logger.error('new WebSocket error');
+			return Promise.resolve({ ok: false, reason: ConnectFailReason.network });
 		}
 
-		if (!wsInstance) {
-			return Promise.resolve(false);
-		}
+		return new Promise<ConnectResult>((resolve) => {
+			let settled = false;
 
-		return new Promise((resolve) => {
-			wsInstance.on('open', () => {
-				this.logger.debug('[FeishuNode:ws] ws connect success');
+			const onOpen = () => {
+				this.logger.debug('ws connect success');
 				this.wsConfig.setWSInstance(wsInstance);
-				this.pingLoop();
-				resolve(true);
-			});
-			wsInstance.on('error', () => {
-				this.logger.error('[FeishuNode:ws] ws connect failed');
-				resolve(false);
-			});
+				this.lastPongAt = Date.now();
+				this.startPingLoop();
+				settle({ ok: true });
+			};
+
+			const onError = (err: Error) => {
+				this.logger.error(`ws connect failed: ${err?.message ?? 'unknown error'}`);
+				settle({ ok: false, reason: ConnectFailReason.network });
+			};
+
+			const onUnexpectedResponse = (_req: unknown, res: IncomingMessage) => {
+				settle({ ok: false, reason: this.parseHandshakeFailure(res) });
+			};
+
+			const settle = (result: ConnectResult) => {
+				if (settled) {
+					return;
+				}
+				settled = true;
+				wsInstance.removeListener('open', onOpen);
+				wsInstance.removeListener('error', onError);
+				wsInstance.removeListener('unexpected-response', onUnexpectedResponse);
+				resolve(result);
+			};
+
+			wsInstance.on('open', onOpen);
+			wsInstance.on('error', onError);
+			wsInstance.on('unexpected-response', onUnexpectedResponse);
 		});
 	}
 
-	private async reConnect(isStart: boolean = false) {
-		if (this.isConnecting) {
-			this.logger.debug('[FeishuNode:ws] repeat connection');
+	/** 解析握手失败响应头，映射为结构化原因 */
+	private parseHandshakeFailure(res?: IncomingMessage): ConnectFailReason {
+		const headers = (res?.headers ?? {}) as Record<string, string | undefined>;
+		const statusRaw = headers[HeaderKey.handshake_status];
+		const msg = headers[HeaderKey.handshake_msg];
+		const status = statusRaw !== undefined ? Number(statusRaw) : NaN;
+
+		if (Number.isNaN(status)) {
+			this.logger.error(
+				`handshake failed without status header, http status: ${res?.statusCode}`,
+			);
+			return ConnectFailReason.server_error;
+		}
+
+		if (status === ErrorCode.auth_failed) {
+			const authErrCode = Number(headers[HeaderKey.handshake_autherrcode]);
+			if (authErrCode === ErrorCode.exceed_conn_limit) {
+				this.logger.warn(
+					`connection limit exceeded (max 50 per app). ${msg ?? ''}`.trim(),
+				);
+				return ConnectFailReason.exceed_conn_limit;
+			}
+			this.logger.error(`handshake auth failed: ${msg ?? ''}`.trim());
+			return ConnectFailReason.auth_failed;
+		}
+
+		if (status === ErrorCode.forbidden) {
+			this.logger.error(`handshake forbidden: ${msg ?? ''}`.trim());
+			return ConnectFailReason.forbidden;
+		}
+
+		this.logger.error(`handshake failed, status: ${status}, ${msg ?? ''}`.trim());
+		return ConnectFailReason.server_error;
+	}
+
+	/** 拉取配置并建连，返回结构化结果；成功时挂载消息处理 */
+	private async connectOnce(): Promise<ConnectResult> {
+		this.reconnectInfo.lastConnectTime = Date.now();
+
+		const configResult = await this.pullConnectConfig();
+		if (!configResult.ok) {
+			return configResult;
+		}
+
+		const connectResult = await this.connect();
+		if (connectResult.ok) {
+			this.communicate();
+		}
+		return connectResult;
+	}
+
+	/**
+	 * 执行一次连接（供 start 与重连定时器调用）。
+	 * 通过 generation 与 connecting 双重守卫，保证：过期链路自动退出、同一时刻仅一个连接尝试。
+	 */
+	private async runConnect(generation: number) {
+		if (generation !== this.generation || !this.shouldReconnect) {
+			return;
+		}
+		if (this.connecting) {
+			this.logger.debug('connect already in progress, skip');
 			return;
 		}
 
-		this.isConnecting = true;
+		this.connecting = true;
+		this.connectionState = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
 
-		const tryConnect = () => {
-			this.reconnectInfo.lastConnectTime = Date.now();
-			return this.pullConnectConfig()
-				.then((isSuccess) => (isSuccess ? this.connect() : Promise.resolve(false)))
-				.then((isSuccess) => {
-					if (isSuccess) {
-						this.communicate();
-						return Promise.resolve(true);
-					}
-					return Promise.resolve(false);
-				});
-		};
+		let result: ConnectResult;
+		try {
+			result = await this.connectOnce();
+		} finally {
+			this.connecting = false;
+		}
 
+		// 等待期间可能已被 stop() 或新一轮 start() 取代
+		if (generation !== this.generation || !this.shouldReconnect) {
+			return;
+		}
+
+		if (result.ok) {
+			this.connectionState = 'connected';
+			this.reconnectAttempt = 0;
+			this.reconnectInfo.attempt = 0;
+			this.logger.info('ws client ready');
+			return;
+		}
+
+		this.connectionState = 'reconnecting';
+		this.scheduleReconnect(result.reason);
+	}
+
+	/**
+	 * 依据失败原因调度下一次重连：
+	 * - 幂等：始终只保留一个待执行定时器
+	 * - 指数退避 + 抖动，exceed_conn_limit 使用更长的最小等待
+	 * - 不可自愈错误（auth/forbidden）直接停止重试并上报
+	 */
+	private scheduleReconnect(reason?: ConnectFailReason) {
+		if (!this.shouldReconnect || !this.wsConfig.getWS('autoReconnect')) {
+			return;
+		}
+
+		if (reason === ConnectFailReason.auth_failed || reason === ConnectFailReason.forbidden) {
+			this.logger.error(
+				`unrecoverable error (${reason}), stop reconnecting. Please check the app credentials / event subscription permissions.`,
+			);
+			this.connectionState = 'stopped';
+			return;
+		}
+
+		const { reconnectCount } = this.wsConfig.getWS();
+		if (reconnectCount >= 0 && this.reconnectAttempt >= reconnectCount) {
+			this.logger.error(
+				`unable to connect after ${this.reconnectAttempt} attempts, give up`,
+			);
+			this.connectionState = 'stopped';
+			return;
+		}
+
+		const delay = this.computeBackoff(reason);
+		this.reconnectAttempt += 1;
+		this.reconnectInfo.attempt = this.reconnectAttempt;
+
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+		}
+
+		const generation = this.generation;
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = undefined;
+			void this.runConnect(generation);
+		}, delay);
+		this.reconnectInfo.nextConnectTime = Date.now() + delay;
+
+		this.logger.info(
+			`reconnect scheduled in ${delay}ms (attempt ${this.reconnectAttempt}` +
+				`${reconnectCount >= 0 ? `/${reconnectCount}` : ''}${reason ? `, reason: ${reason}` : ''})`,
+		);
+	}
+
+	/** 指数退避（上限为服务端建议的 reconnectInterval），叠加抖动避免多副本同时抢连 */
+	private computeBackoff(reason?: ConnectFailReason): number {
+		const { reconnectInterval, reconnectNonce } = this.wsConfig.getWS();
+		const cap = reconnectInterval || 120 * 1000;
+
+		let delay = Math.min(BACKOFF_BASE_MS * 2 ** this.reconnectAttempt, cap);
+
+		// 连接数超限多半是重启后旧连接尚未被网关回收，给它更充裕的过期窗口
+		if (reason === ConnectFailReason.exceed_conn_limit) {
+			delay = Math.min(Math.max(delay, 10 * 1000), cap);
+		}
+
+		const jitter = reconnectNonce ? reconnectNonce * Math.random() : 0;
+		return Math.floor(delay + jitter);
+	}
+
+	private startPingLoop() {
 		if (this.pingInterval) {
 			clearTimeout(this.pingInterval);
 		}
-
-		const wsInstance = this.wsConfig.getWSInstance();
-
-		if (isStart) {
-			if (wsInstance) {
-				wsInstance?.terminate();
-			}
-			if (this.reconnectInterval) {
-				clearTimeout(this.reconnectInterval);
-			}
-			let isSuccess = false;
-			try {
-				isSuccess = await tryConnect();
-			} finally {
-				this.isConnecting = false;
-			}
-			if (!isSuccess) {
-				this.logger.error('[FeishuNode:ws] connect failed');
-				await this.reConnect();
-			}
-			this.logger.info('[FeishuNode:ws] ws client ready');
-			return;
-		}
-
-		const { autoReconnect, reconnectNonce, reconnectCount, reconnectInterval } =
-			this.wsConfig.getWS();
-
-		if (!autoReconnect) {
-			return;
-		}
-
-		this.logger.debug('[FeishuNode:ws] reconnect');
-
-		if (wsInstance) {
-			wsInstance?.terminate();
-		}
-
-		this.wsConfig.setWSInstance(null);
-
-		const reconnectNonceTime = reconnectNonce ? reconnectNonce * Math.random() : 0;
-		this.reconnectInterval = setTimeout(async () => {
-			(async function loopReConnect(this: WSClient, count: number) {
-				count++;
-				const isSuccess = await tryConnect();
-				// if reconnectCount < 0, the reconnect time is infinite
-				if (isSuccess) {
-					this.logger.debug('[FeishuNode:ws] reconnect success');
-					this.isConnecting = false;
-					return;
-				}
-
-				this.logger.info(`[FeishuNode:ws] unable to connect to the server after trying ${count} times`);
-
-				if (reconnectCount >= 0 && count >= reconnectCount) {
-					this.isConnecting = false;
-					return;
-				}
-
-				this.reconnectInterval = setTimeout(() => {
-					loopReConnect.bind(this)(count);
-				}, reconnectInterval);
-				this.reconnectInfo.nextConnectTime = Date.now() + reconnectInterval;
-			}).bind(this)(0);
-		}, reconnectNonceTime);
-		this.reconnectInfo.nextConnectTime = Date.now() + reconnectNonceTime;
+		this.pingLoop();
 	}
 
 	private pingLoop() {
@@ -246,6 +402,16 @@ export class WSClient {
 
 		const wsInstance = this.wsConfig.getWSInstance();
 		if (wsInstance?.readyState === WebSocket.OPEN) {
+			// 僵尸连接检测：长时间收不到 pong，说明是半开连接，主动断开触发重连
+			if (this.lastPongAt && Date.now() - this.lastPongAt > pingInterval * 2 + 5000) {
+				this.logger.warn(
+					'no pong received for too long, connection considered dead, terminating',
+				);
+				wsInstance.terminate();
+				// 不再调度本循环；重连成功后会重新 startPingLoop
+				return;
+			}
+
 			const frame: pbbp2.IFrame = {
 				headers: [
 					{
@@ -259,7 +425,7 @@ export class WSClient {
 				LogID: 0,
 			};
 			this.sendMessage(frame);
-			this.logger.debug('[FeishuNode:ws] ping success');
+			this.logger.debug('ping success');
 		}
 
 		this.pingInterval = setTimeout(this.pingLoop.bind(this), pingInterval);
@@ -281,17 +447,24 @@ export class WSClient {
 			}
 		});
 
-		wsInstance?.on('error', (e) => {
-			this.logger.error('[FeishuNode:ws] ws error');
+		wsInstance?.on('error', () => {
+			this.logger.error('ws error');
 		});
 
 		wsInstance?.on('close', () => {
-			if (this.shouldReconnect) {
-				this.logger.info('[FeishuNode:ws] client closed unexpectedly, try to reconnect');
-				this.reConnect();
-			} else {
-				this.logger.debug('[FeishuNode:ws] client closed');
+			// 仅当前实例的 close 才触发重连，避免被 terminate 的旧实例误触发额外重连
+			if (this.wsConfig.getWSInstance() !== wsInstance) {
+				return;
 			}
+
+			if (!this.shouldReconnect) {
+				this.logger.debug('client closed');
+				return;
+			}
+
+			this.logger.info('client closed unexpectedly, try to reconnect');
+			this.connectionState = 'reconnecting';
+			this.scheduleReconnect();
 		});
 	}
 
@@ -304,7 +477,9 @@ export class WSClient {
 		}
 
 		if (type === MessageType.pong && payload) {
-			this.logger.debug('[FeishuNode:ws] receive pong');
+			this.logger.debug('receive pong');
+			this.lastPongAt = Date.now();
+			this.reconnectInfo.lastPongAt = this.lastPongAt;
 			const dataString = new TextDecoder('utf-8').decode(payload);
 			const { PingInterval, ReconnectCount, ReconnectInterval, ReconnectNonce } =
 				JSON.parse(dataString);
@@ -316,7 +491,7 @@ export class WSClient {
 				reconnectNonce: ReconnectNonce * 1000,
 			});
 
-			this.logger.debug('[FeishuNode:ws] update wsConfig with pong data');
+			this.logger.debug('update wsConfig with pong data');
 		}
 	}
 
@@ -348,7 +523,7 @@ export class WSClient {
 		}
 
 		this.logger.debug(
-			`[FeishuNode:ws] receive message, message_type: ${type}; message_id: ${message_id}; trace_id: ${trace_id}; data: ${mergedData.data}`,
+			`receive message, message_type: ${type}; message_id: ${message_id}; trace_id: ${trace_id}; data: ${mergedData.data}`,
 		);
 
 		const respPayload: { code: number; data?: string } = {
@@ -365,7 +540,7 @@ export class WSClient {
 			respPayload.code = HttpStatusCode.internal_server_error;
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			this.logger.error(
-				`[FeishuNode:ws] invoke event failed, message_type: ${type}; message_id: ${message_id}; trace_id: ${trace_id}; error: ${errorMessage}`,
+				`invoke event failed, message_type: ${type}; message_id: ${message_id}; trace_id: ${trace_id}; error: ${errorMessage}`,
 			);
 		}
 		const endTime = Date.now();
@@ -383,45 +558,78 @@ export class WSClient {
 			const resp = pbbp2.Frame.encode(data).finish();
 			this.wsConfig.getWSInstance()?.send(resp, (err) => {
 				if (err) {
-					this.logger.error('[FeishuNode:ws] send data failed');
+					this.logger.error('send data failed');
 				}
 			});
 		}
 	}
 
 	getReconnectInfo() {
-		return this.reconnectInfo;
+		return { ...this.reconnectInfo, state: this.connectionState };
 	}
 
 	async start(params: { eventDispatcher: EventDispatcher }) {
 		const { eventDispatcher } = params;
 
 		if (!eventDispatcher) {
-			this.logger.error('[FeishuNode:ws] client need to start with a eventDispatcher');
+			this.logger.error('client need to start with a eventDispatcher');
 			return;
 		}
 		this.eventDispatcher = eventDispatcher;
-		this.reConnect(true);
+
+		// 递增代际，让任何遗留的重连链路失效（防止 issue #177 的并行重连堆积）
+		this.generation += 1;
+		this.shouldReconnect = true;
+		this.reconnectAttempt = 0;
+		this.reconnectInfo.attempt = 0;
+
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = undefined;
+		}
+
+		const oldInstance = this.wsConfig.getWSInstance();
+		if (oldInstance) {
+			oldInstance.terminate();
+			this.wsConfig.setWSInstance(null);
+		}
+
+		await this.runConnect(this.generation);
 	}
 
 	async stop() {
 		this.shouldReconnect = false;
+		this.generation += 1;
+		this.connectionState = 'stopped';
 
 		const wsInstance = this.wsConfig.getWSInstance();
 		if (wsInstance) {
-			wsInstance.terminate();
+			// 优雅关闭：发送 close 帧让飞书网关尽快回收连接槽位，缩短重启后「连接数超限」窗口
+			if (wsInstance.readyState === WebSocket.OPEN) {
+				try {
+					wsInstance.close(1000);
+				} catch {
+					wsInstance.terminate();
+				}
+			} else {
+				wsInstance.terminate();
+			}
+			this.wsConfig.setWSInstance(null);
 		}
 
-		if (this.reconnectInterval) {
-			clearTimeout(this.reconnectInterval);
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = undefined;
 		}
 
 		if (this.pingInterval) {
 			clearTimeout(this.pingInterval);
+			this.pingInterval = undefined;
 		}
 
 		this.dataCache.clear();
 		this.eventDispatcher = undefined;
-		this.isConnecting = false;
+		this.connecting = false;
+		this.reconnectAttempt = 0;
 	}
 }

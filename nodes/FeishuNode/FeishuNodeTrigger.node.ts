@@ -11,6 +11,7 @@ import {
 import { Credentials } from '../help/type/enums';
 import { WSClient } from '../help/utils/feishu-sdk/ws-client';
 import { EventDispatcher } from '../help/utils/feishu-sdk/handler/event-handler';
+import { createScopedLogger } from '../help/utils/feishu-sdk/logger';
 import { triggerEventProperty } from '../help/utils/properties';
 
 /**
@@ -144,11 +145,14 @@ export class FeishuNodeTrigger implements INodeType {
 		const appSecret = credentials['appsecret'] as string;
 		const baseUrl = credentials['baseURL'] as string;
 
+		const workflowId = this.getWorkflow()?.id;
+		const logger = createScopedLogger(this.logger, workflowId);
+
 		const wsClient: WSClient = new WSClient({
 			appId,
 			appSecret,
 			domain: `${baseUrl}`,
-			logger: this.logger,
+			logger,
 			helpers: this.helpers,
 		});
 
@@ -228,7 +232,7 @@ export class FeishuNodeTrigger implements INodeType {
 				} catch (error) {
 					clearTimeout(timeoutId);
 					const errorMessage = error instanceof Error ? error.message : String(error);
-					this.logger.warn(
+					logger.warn(
 						`[飞书响应模式] 等待飞书响应节点超时或出错: ${errorMessage}。` +
 							`请确认工作流中包含"飞书响应"节点，且能在 ${responseTimeout}ms 内执行到该节点。`,
 					);
@@ -237,9 +241,7 @@ export class FeishuNodeTrigger implements INodeType {
 			};
 		}
 
-			const eventDispatcher = new EventDispatcher({ logger: this.logger, isAnyEvent }).register(
-				handlers,
-			);
+			const eventDispatcher = new EventDispatcher({ logger, isAnyEvent }).register(handlers);
 
 			await wsClient.start({ eventDispatcher });
 		};

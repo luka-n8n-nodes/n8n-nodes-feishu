@@ -7,6 +7,21 @@ export enum ErrorCode {
 	exceed_conn_limit = 1000040350,
 }
 
+/**
+ * 连接失败的分类原因，用于决定重连策略：
+ * - network / system_busy / server_error：可自愈，指数退避后重试
+ * - exceed_conn_limit：连接数超限（多因实例重启后旧连接尚未被网关回收），需更长等待
+ * - auth_failed / forbidden：凭证或权限问题，不可自愈，停止重试并上报
+ */
+export enum ConnectFailReason {
+	network = 'network',
+	system_busy = 'system_busy',
+	server_error = 'server_error',
+	exceed_conn_limit = 'exceed_conn_limit',
+	auth_failed = 'auth_failed',
+	forbidden = 'forbidden',
+}
+
 export enum FrameType {
 	control = 0,
 	data = 1,

@@ -28,7 +28,7 @@ export default class RequestHandle {
 			const { encrypt, ...rest } = data || {};
 			if (encrypt) {
 				if (!this.aesCipher) {
-					this.logger.error('[FeishuNode:request] parse encrypt data failed: aesCipher is not initialized');
+					this.logger.error('parse encrypt data failed: aesCipher is not initialized');
 					return rest;
 				}
 				try {
@@ -39,7 +39,7 @@ export default class RequestHandle {
 					};
 				} catch (e) {
 					this.logger.error(
-						`[FeishuNode:request] parse encrypt data failed: ${e instanceof Error ? e.message : String(e)}`,
+						`parse encrypt data failed: ${e instanceof Error ? e.message : String(e)}`,
 					);
 					return rest;
 				}
@@ -72,7 +72,7 @@ export default class RequestHandle {
 		}
 
 		if (!data?.headers) {
-			this.logger.warn('[FeishuNode:request] event validation failed: missing headers');
+			this.logger.warn('event validation failed: missing headers');
 			return false;
 		}
 
@@ -83,7 +83,7 @@ export default class RequestHandle {
 		} = data.headers;
 
 		if (!timestamp || !nonce || !signature) {
-			this.logger.warn('[FeishuNode:request] event validation failed: missing required headers');
+			this.logger.warn('event validation failed: missing required headers');
 			return false;
 		}
 
