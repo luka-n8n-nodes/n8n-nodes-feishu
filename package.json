@@ -47,6 +47,7 @@
     "nodes": [
       "dist/nodes/FeishuNode/FeishuNode.node.js",
       "dist/nodes/FeishuNode/FeishuNodeTrigger.node.js",
+      "dist/nodes/FeishuNode/FeishuWebhookTrigger.node.js",
       "dist/nodes/FeishuNode/RespondToFeishu.node.js"
     ]
   },

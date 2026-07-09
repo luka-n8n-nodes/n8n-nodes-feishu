@@ -6,16 +6,14 @@ import {
 	INodeTypeDescription,
 	NodeConnectionTypes,
 	IDataObject,
-	IExecuteResponsePromiseData,
+	IN8nHttpFullResponse,
 	NodeOperationError,
 } from 'n8n-workflow';
 import { configuredOutputs } from '../help/utils/outputs';
 
-/**
- * 飞书自定义响应数据的标记键名
- * 用于在 IRun 执行结果中识别飞书响应节点的输出
- */
-export const FEISHU_RESPONSE_KEY = 'customFeishuResponse';
+/** 同步响应模式 */
+const MODE_WEBSOCKET = 'websocket';
+const MODE_WEBHOOK = 'webhook';
 
 export class RespondToFeishu implements INodeType {
 	description: INodeTypeDescription = {
@@ -27,7 +25,7 @@ export class RespondToFeishu implements INodeType {
 		usableAsTool: undefined,
 		subtitle:
 			'={{$parameter["respondWith"] === "noResponse" ? "不返回任何响应" : "返回自定义 JSON 数据"}}',
-		description: '同步响应飞书 Trigger 的请求',
+		description: '同步响应飞书 Trigger 或飞书 Webhook Trigger 的请求',
 		defaults: {
 			name: '飞书响应',
 		},
@@ -35,19 +33,41 @@ export class RespondToFeishu implements INodeType {
 		outputs: `={{(${configuredOutputs})($nodeVersion, $parameter)}}`,
 		properties: [
 			{
+				displayName: '同步响应模式',
+				name: 'mode',
+				type: 'options',
+				options: [
+					{
+						name: '长链接同步响应',
+						value: 'websocket',
+						description:
+							'通过长链接（WebSocket）同步返回响应，需配合「飞书 Trigger」（长链接触发器）使用',
+					},
+					{
+						name: 'Webhook 同步响应',
+						value: 'webhook',
+						description:
+							'通过 Webhook 的 HTTP 响应同步返回，需配合「飞书 Webhook Trigger」（Webhook 触发器）使用',
+					},
+				],
+				default: 'websocket',
+				description:
+					'选择同步响应的方式：「长链接同步响应」需使用「飞书 Trigger」（长链接触发器）；「Webhook 同步响应」需使用「飞书 Webhook Trigger」（Webhook 触发器）。请确保此处选择与工作流中使用的触发器类型一致。',
+			},
+			{
 				displayName: '响应内容',
 				name: 'respondWith',
 				type: 'options',
 				options: [
 					{
-						name: '无响应',
+						name: 'No Data',
 						value: 'noResponse',
-						description: '不返回任何响应',
+						description: 'Respond with an empty body',
 					},
 					{
-						name: '自定义 JSON',
+						name: 'JSON',
 						value: 'json',
-						description: '返回自定义 JSON 数据',
+						description: 'Respond with a custom JSON body',
 					},
 				],
 				default: 'noResponse',
@@ -92,6 +112,7 @@ export class RespondToFeishu implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
+		const mode = this.getNodeParameter('mode', 0, MODE_WEBSOCKET) as string;
 		const respondWith = this.getNodeParameter('respondWith', 0) as string;
 		const enableResponseOutput = this.getNodeParameter('enableResponseOutput', 0, false) as boolean;
 
@@ -100,17 +121,6 @@ export class RespondToFeishu implements INodeType {
 		let firstResponseData: IDataObject | undefined;
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-			const item = items[itemIndex];
-			const json = item.json as IDataObject;
-
-			// 检查 responseMode（可选，不报错）
-			const responseMode = json.responseMode as string;
-			if (responseMode && responseMode !== 'responseNode') {
-				this.logger.warn(
-					`飞书 Trigger 的响应模式不是 "Using '飞书响应' Node"，当前模式: ${responseMode}`,
-				);
-			}
-
 			// 构建响应数据
 			let responseData: IDataObject = {};
 
@@ -127,38 +137,41 @@ export class RespondToFeishu implements INodeType {
 				firstResponseData = responseData;
 			}
 
-			// 构建带有特殊标记的响应输出项（保持数据结构不变，供下游/调试使用）
+			// 响应输出项直接等于返回给飞书的 JSON 内容（不再额外包裹标记字段）
 			responseItems.push({
-				json: {
-					[FEISHU_RESPONSE_KEY]: responseData,
-				},
+				json: responseData,
 			});
 		}
 
-		// 通过 n8n 的 sendResponse 生命周期机制将响应同步返回给飞书 Trigger。
-		// 该机制与官方「Respond to Webhook」节点一致：在 queue mode（多 worker）/ 多主部署下，
-		// Worker 会通过 Redis 把响应路由回持有 WebSocket 连接的主实例，从而正确解析 Trigger 侧的 responsePromise。
-		// 在单实例模式下，sendResponse 钩子会被同进程直接触发。
-		this.sendResponse((firstResponseData ?? {}) as IExecuteResponsePromiseData);
+		const feishuResponseBody = (firstResponseData ?? {}) as IDataObject;
 
-		// 清理输入数据（移除内部字段）
-		const cleanedItems = items.map((item) => {
-			const cleanedJson = { ...item.json };
-			delete cleanedJson.responseMode;
-			return {
-				...item,
-				json: cleanedJson,
+		// 通过 n8n 的 sendResponse 生命周期机制将响应同步返回给触发器。
+		// 两种模式的底层机制不同，负载格式也不同：
+		// - 长链接模式：飞书 Trigger 内部用 emit(data, responsePromise)，sendResponse 的「原始值」
+		//   会被直接返回给飞书，因此发送「裸的飞书 JSON」。
+		// - Webhook 模式：走 n8n 核心的 setupResponseNodePromise，期望 IN8nHttpFullResponse
+		//   （{ body, headers, statusCode }），核心会把 body 以固定 200 状态码写回 HTTP 响应。
+		//   在 queue mode / 多 main / 多 webhook 部署下，worker 的 sendResponse 会经 Redis 路由回
+		//   持有 HTTP res 的 main 实例，由核心解析该 responsePromise——只要发送的格式正确即可可靠工作。
+		if (mode === MODE_WEBHOOK) {
+			const httpResponse: IN8nHttpFullResponse = {
+				body: feishuResponseBody,
+				headers: {},
+				statusCode: 200,
 			};
-		});
+			this.sendResponse(httpResponse);
+		} else {
+			this.sendResponse(feishuResponseBody);
+		}
 
 		// 根据是否启用响应输出分支返回不同的输出（保持原有数据结构不变）
 		if (enableResponseOutput) {
 			// 输出分支 1: Input Data（原始输入）
-			// 输出分支 2: Response（响应数据，包含特殊标记）
-			return [cleanedItems, responseItems];
+			// 输出分支 2: Response（与返回给飞书的 JSON 内容一致）
+			return [items, responseItems];
 		}
 
-		// 单输出：返回包含特殊标记的响应数据
+		// 单输出：返回与飞书响应 JSON 内容一致的数据
 		return [responseItems];
 	}
 }

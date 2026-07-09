@@ -13,6 +13,7 @@ import { WSClient } from '../help/utils/feishu-sdk/ws-client';
 import { EventDispatcher } from '../help/utils/feishu-sdk/handler/event-handler';
 import { createScopedLogger } from '../help/utils/feishu-sdk/logger';
 import { triggerEventProperty } from '../help/utils/properties';
+import { ANY_EVENT } from '../help/utils/feishu-sdk/consts';
 
 /**
  * 需要同步响应的事件类型集合
@@ -71,7 +72,10 @@ export class FeishuNodeTrigger implements INodeType {
 				type: 'notice',
 				default: '',
 			},
-			triggerEventProperty,
+			{
+				...triggerEventProperty,
+				default: [ANY_EVENT],
+			},
 			{
 				displayName: '响应模式',
 				name: 'responseMode',
@@ -91,40 +95,6 @@ export class FeishuNodeTrigger implements INodeType {
 				default: 'immediately',
 				description: '选择何时向飞书发送响应',
 			},
-			{
-				displayName: '选项',
-				name: 'options',
-				type: 'collection',
-				placeholder: '添加选项',
-				default: {},
-				options: [
-					{
-						displayName: '回调提示信息',
-						name: 'callbackToast',
-						type: 'string',
-						default: '',
-						description:
-							'设置回调触发时显示给用户的提示信息。如果不设置，则不显示任何提示。仅在 Immediately 模式下有效。',
-						displayOptions: {
-							show: {
-								'/responseMode': ['immediately'],
-							},
-						},
-					},
-					{
-						displayName: '响应超时时间',
-						name: 'responseTimeout',
-						type: 'number',
-						default: 3000,
-						description: '等待飞书响应节点响应的最大时间（毫秒），超时后将返回空响应',
-						displayOptions: {
-							show: {
-								'/responseMode': ['responseNode'],
-							},
-						},
-					},
-				],
-			},
 		],
 	};
 
@@ -136,10 +106,8 @@ export class FeishuNodeTrigger implements INodeType {
 		}
 
 		const responseMode = this.getNodeParameter('responseMode', 'immediately') as string;
-		const options = this.getNodeParameter('options', {}) as IDataObject;
-		const callbackToast = (options.callbackToast as string) || undefined;
-		// 使用与 UI 默认值一致的 3000ms
-		const responseTimeout = (options.responseTimeout as number) || 3000;
+		// 等待飞书响应节点的最大时间，固定为飞书要求的 3 秒
+		const responseTimeout = 3000;
 
 		const appId = credentials['appid'] as string;
 		const appSecret = credentials['appsecret'] as string;
@@ -162,7 +130,7 @@ export class FeishuNodeTrigger implements INodeType {
 
 		const startWsClient = async () => {
 			const events = this.getNodeParameter('events', []) as string[];
-			const isAnyEvent = events.includes('any_event');
+			const isAnyEvent = events.includes(ANY_EVENT);
 			const handlers: Record<string, (data: IDataObject) => Promise<IDataObject>> = {};
 
 		for (const event of events) {
@@ -171,10 +139,7 @@ export class FeishuNodeTrigger implements INodeType {
 				const actualEventType = isAnyEvent ? (data.event_type as string) : event;
 				const isSyncEvent = SYNC_RESPONSE_EVENTS.has(actualEventType);
 
-				const enrichedData = {
-					...data,
-					responseMode,
-				};
+				const enrichedData = { ...data };
 
 				// 非同步事件：即发即忘，无需等待工作流完成也无需返回响应数据
 				if (!isSyncEvent) {
@@ -187,14 +152,6 @@ export class FeishuNodeTrigger implements INodeType {
 				// immediately 模式：触发工作流后立即响应，不等待执行结果
 				if (responseMode === 'immediately') {
 					this.emit([this.helpers.returnJsonArray(enrichedData)]);
-					if (callbackToast) {
-						return {
-							toast: {
-								type: 'info',
-								content: callbackToast,
-							},
-						};
-					}
 					return {};
 				}
 
