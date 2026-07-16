@@ -104,7 +104,7 @@ const ChatUpdateOperate: ResourceOperations = {
 			description: '群类型。private: 私有群。public: 公开群。',
 		},
 		{
-			displayName: '发言权限',
+			displayName: '邀请入群权限',
 			name: 'add_member_permission',
 			type: 'options',
 			options: [
@@ -113,7 +113,7 @@ const ChatUpdateOperate: ResourceOperations = {
 				{ name: '仅群主和管理员', value: 'only_owner' },
 			],
 			default: '',
-			description: '谁可以邀请成员入群。',
+			description: '谁可以添加群成员，群成员包括用户或机器人',
 		},
 		{
 			displayName: '群分享权限',
