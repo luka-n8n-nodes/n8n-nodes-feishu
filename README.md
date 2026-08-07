@@ -1,5 +1,7 @@
 # @luka-cat-mimi/n8n-nodes-feishu
 
+> 🚀 功能强大的飞书 n8n 社区节点，支持 140+ API 接口集成，涵盖 WebSocket / Webhook 双模式事件监听、多维表格增强操作（字段映射、条件分支、Upsert）、知识库、云文档、消息、日历、通讯录、云空间等。内置自动分页、批次控制和超时管理，轻松应对企业级自动化场景。
+
 飞书 n8n 社区节点，提供飞书开放平台 API 的集成支持。
 
 > 本项目是基于 [n8n-nodes-feishu-lite](https://github.com/other-blowsnow/n8n-nodes-feishu-lite) 之上进行的二次开发，感谢原作者的开源贡献！
