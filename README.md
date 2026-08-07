@@ -120,14 +120,21 @@
 
 ### 多维表格 (34)
 
-- 解析多维表格地址 ✨ 增强（支持从 URL 解析 app_token、table_id、view_id 等）
+- 多维表格 - Delete row(s) ✨ 新增
+- 多维表格 - Get row(s) ✨ 新增
+- 多维表格 - If row exists ✨ 新增
+- 多维表格 - If row does not exist ✨ 新增
+- 多维表格 - Insert row ✨ 新增
+- 多维表格 - Update row(s) ✨ 新增
+- 多维表格 - Upsert row(s) ✨ 新增
+- 多维表格 - Create a Data Table ✨ 新增
+- 解析多维表格地址 ✨ 增强
 - 创建多维表格
 - 复制多维表格
 - 获取多维表格元数据
 - 更新多维表格元数据
 - 列出数据表
 - 新增数据表
-- **Create a Data Table（自定义封装）** ✨ 新增（可视化配置表名、默认视图和初始字段类型）
 - 更新数据表
 - 删除数据表
 - 列出视图
@@ -137,15 +144,8 @@
 - 删除视图
 - 查询记录
 - 查询记录-通过记录ID
-- **Get row(s)（自定义封装）** ✨ 新增（按条件查询记录，支持排序、字段筛选和数据格式转换）
-- **If row exists（自定义封装）** ✨ 新增（存在匹配记录时继续执行，否则跳过）
-- **If row does not exist（自定义封装）** ✨ 新增（不存在匹配记录时继续执行，否则跳过）
-- **Delete row(s)（自定义封装）** ✨ 新增（按条件查找并批量删除记录）
 - 新增记录
-- **Insert row（自定义封装）** ✨ 新增（字段映射批量新增，支持附件上传和 Auto Map）
 - 更新记录
-- **Update row(s)（自定义封装）** ✨ 新增（按 Record ID 字段映射批量更新，支持附件上传）
-- **Upsert row(s)（自定义封装）** ✨ 新增（按条件查找：找到则更新，找不到则新建）
 - 删除记录
 - 批量新增记录
 - 批量更新记录
@@ -244,7 +244,7 @@
 | 群组管理 | 搜索对用户或机器人可见的群列表                           |
 | 群组管理 | 获取群成员列表                                           |
 | 多维表格 | 查询记录                                                 |
-| 多维表格 | Get row(s)（按条件查询记录）✨ 新增                      |
+| 多维表格 | 多维表格 - Get row(s) ✨ 新增                            |
 | 多维表格 | 列出数据表 ✨ 新增                                       |
 | 多维表格 | 列出视图 ✨ 新增                                         |
 | 多维表格 | 列出字段 ✨ 新增                                         |
@@ -276,12 +276,12 @@
 
 | 操作 | 主要能力 |
 | ---- | -------- |
-| Get row(s) | 按字段条件查询记录，支持 Return All、排序、字段筛选和数据格式转换 |
-| If row exists / If row does not exist | 条件分支：匹配时透传输入项，不匹配时跳过 |
-| Insert row / Update row(s) | Resource Mapper 字段映射，支持 Auto Map、附件上传和跨输入项批量写入 |
-| Upsert row(s) | 按条件查找记录，找到则更新、找不到则新建；默认并发批处理（约 10 次/秒） |
-| Delete row(s) | 按条件查找并批量删除匹配记录 |
-| Create a Data Table | 可视化配置初始字段类型及属性，无需手写 JSON body |
+| 多维表格 - Delete row(s) | 按条件查找并批量删除匹配记录 |
+| 多维表格 - Get row(s) | 按字段条件查询记录，支持 Return All、排序、字段筛选和数据格式转换 |
+| 多维表格 - If row exists / If row does not exist | 条件分支：匹配时透传输入项，不匹配时跳过 |
+| 多维表格 - Insert row / Update row(s) | Resource Mapper 字段映射，支持 Auto Map、附件上传和跨输入项批量写入 |
+| 多维表格 - Upsert row(s) | 按条件查找记录，找到则更新、找不到则新建；默认并发批处理（约 10 次/秒） |
+| 多维表格 - Create a Data Table | 可视化配置初始字段类型及属性，无需手写 JSON body |
 
 匹配条件（Match / Must Match）会根据字段类型动态加载可用运算符，Column Name or ID 下拉列表与 Resource Mapper 字段列表均来自实时字段元数据。
 
