@@ -52,18 +52,18 @@
     ]
   },
   "devDependencies": {
-    "@n8n/node-cli": "*",
-    "@types/node": "^20.19.37",
-    "@types/ws": "^8.5.13",
-    "eslint": "9.39.4",
-    "form-data": "^4.0.1",
-    "glob": "^10.4.5",
-    "prettier": "3.8.1",
-    "typescript": "5.9.3"
+    "@n8n/node-cli": "^0.17.0",
+    "@types/node": "^20.19.43",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.4",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "ws": "^8.18.0",
-    "protobufjs": "^7.5.3"
+    "form-data": "^4.0.6",
+    "glob": "^13.0.6",
+    "protobufjs": "^8.7.1",
+    "ws": "^8.21.2"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
