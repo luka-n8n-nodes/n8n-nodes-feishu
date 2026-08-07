@@ -1,9 +1,12 @@
 import {
 	IDataObject,
 	IExecuteFunctions,
+	ILoadOptionsFunctions,
 	INodeExecutionData,
+	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
+	ResourceMapperFields,
 	NodeConnectionTypes,
 	NodeOperationError,
 	sleep,
@@ -11,6 +14,8 @@ import {
 import ResourceFactory from '../help/builder/ResourceFactory';
 import { Credentials, OutputType } from '../help/type/enums';
 import { OperationResult, OperationCallFunction } from '../help/type/IResource';
+import BitableFieldUtils from '../help/utils/BitableFieldUtils';
+import { BITABLE_UPSERT_OPERATION } from '../help/utils/bitableUpsertProperties';
 import { ICommonOptionsValue } from '../help/utils/sharedOptions';
 
 const resourceBuilder = ResourceFactory.build(__dirname);
@@ -47,14 +52,26 @@ interface IRequestResult {
 /**
  * 从 options 参数中获取批次配置
  */
-function getBatchConfig(context: IExecuteFunctions): IBatchConfig {
+function getBatchConfig(context: IExecuteFunctions, operation: string): IBatchConfig {
 	try {
 		const options = context.getNodeParameter('options', 0, {}) as ICommonOptionsValue;
+		const batch = options?.batching?.batch;
+
+		if (operation === BITABLE_UPSERT_OPERATION) {
+			const batchSize = batch?.batchSize ?? 10;
+			const batchInterval = batch?.batchInterval ?? 1000;
+
+			return {
+				enabled: true,
+				batchSize: batchSize === 0 ? 1 : batchSize,
+				batchInterval,
+			};
+		}
 
 		// 检查用户是否显式添加了 Batching 选项
-		const batchingEnabled = options?.batching?.batch !== undefined;
-		const batchSize = options?.batching?.batch?.batchSize ?? 50;
-		const batchInterval = options?.batching?.batch?.batchInterval ?? 0;
+		const batchingEnabled = batch !== undefined;
+		const batchSize = batch?.batchSize ?? 50;
+		const batchInterval = batch?.batchInterval ?? 0;
 
 		return {
 			enabled: batchingEnabled,
@@ -119,8 +136,20 @@ function processResponseData(
 		}
 
 		if (outputType === OutputType.None) {
-			// 无输出模式
 			return { data: null };
+		}
+
+		if (outputType === OutputType.PassThrough) {
+			const inputItem = context.getInputData()[itemIndex];
+			return {
+				data: [
+					{
+						json: inputItem.json,
+						binary: inputItem.binary,
+						pairedItem: { item: itemIndex },
+					},
+				],
+			};
 		}
 	}
 
@@ -176,8 +205,7 @@ async function executeSerial(
 			}
 
 			if (processed.data === null && !processed.multipleOutput) {
-				// 无输出模式
-				return [];
+				continue;
 			}
 
 			if (processed.data) {
@@ -313,6 +341,124 @@ async function executeParallel(
 }
 
 export class FeishuNode implements INodeType {
+	methods = {
+		loadOptions: {
+			async getBitableTableFields(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const app_token = this.getCurrentNodeParameter('app_toke') as string;
+				const table_id = this.getCurrentNodeParameter('table_id') as string;
+
+				if (!app_token || !table_id) {
+					return [];
+				}
+
+				try {
+					const fields = BitableFieldUtils.filterConditionFields(
+						await BitableFieldUtils.listFields(this, app_token, table_id),
+					);
+
+					return fields.map((field) => {
+						const uiType = BitableFieldUtils.getEffectiveUiType(field);
+
+						return {
+							name: `${field.field_name} (${BitableFieldUtils.getFieldTypeLabel(uiType)})`,
+							value: BitableFieldUtils.encodeFilterFieldOptionValue(
+								uiType,
+								field.field_name,
+							),
+							description: uiType,
+						};
+					});
+				} catch {
+					return [];
+				}
+			},
+			async getBitableFilterConditions(
+				this: ILoadOptionsFunctions,
+			): Promise<INodePropertyOptions[]> {
+				// &fieldName：fixedCollection 内读取同条件条目的 Column Name or ID
+				const fieldSelection =
+					(this.getCurrentNodeParameter('&fieldName') as string) ||
+					(this.getCurrentNodeParameter('fieldName') as string);
+				const app_token = this.getCurrentNodeParameter('app_toke') as string;
+				const table_id = this.getCurrentNodeParameter('table_id') as string;
+
+				const fieldUiType = await BitableFieldUtils.resolveFilterFieldUiType(
+					this,
+					fieldSelection,
+					app_token,
+					table_id,
+				);
+
+				return BitableFieldUtils.getFilterOperatorOptions(fieldUiType);
+			},
+			async getBitableDateValueTypes(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const fieldSelection =
+					(this.getCurrentNodeParameter('&fieldName') as string) ||
+					(this.getCurrentNodeParameter('fieldName') as string);
+				const condition =
+					(this.getCurrentNodeParameter('&condition') as string) ||
+					(this.getCurrentNodeParameter('condition') as string);
+				const app_token = this.getCurrentNodeParameter('app_toke') as string;
+				const table_id = this.getCurrentNodeParameter('table_id') as string;
+
+				const fieldUiType = await BitableFieldUtils.resolveFilterFieldUiType(
+					this,
+					fieldSelection,
+					app_token,
+					table_id,
+				);
+
+				return BitableFieldUtils.getDateValueTypeOptions(fieldUiType, condition);
+			},
+			async getBitableFilterValueOptions(
+				this: ILoadOptionsFunctions,
+			): Promise<INodePropertyOptions[]> {
+				const fieldSelection =
+					(this.getCurrentNodeParameter('&fieldName') as string) ||
+					(this.getCurrentNodeParameter('fieldName') as string);
+				const condition =
+					(this.getCurrentNodeParameter('&condition') as string) ||
+					(this.getCurrentNodeParameter('condition') as string);
+				const app_token = this.getCurrentNodeParameter('app_toke') as string;
+				const table_id = this.getCurrentNodeParameter('table_id') as string;
+
+				if (!fieldSelection) {
+					return [];
+				}
+
+				const field = await BitableFieldUtils.resolveFilterFieldMeta(
+					this,
+					fieldSelection,
+					app_token,
+					table_id,
+				);
+				if (!field) {
+					return [];
+				}
+
+				const fieldUiType = BitableFieldUtils.getEffectiveUiType(field);
+				const presetOptions = BitableFieldUtils.getFilterValueOptions(field);
+
+				if (presetOptions.length > 0) {
+					return presetOptions.map((option) => ({
+						...option,
+						description: BitableFieldUtils.getFilterValueHint(fieldUiType, condition),
+					}));
+				}
+
+				return [];
+			},
+		},
+		resourceMapping: {
+			async getBitableUpsertFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const app_token = this.getCurrentNodeParameter('app_toke') as string;
+				const table_id = this.getCurrentNodeParameter('table_id') as string;
+
+				return BitableFieldUtils.getUpsertResourceMapperFields(this, app_token, table_id);
+			},
+		},
+	};
+
 	description: INodeTypeDescription = {
 		displayName: '飞书',
 		name: 'feishuNode',
@@ -388,6 +534,25 @@ export class FeishuNode implements INodeType {
 		const resource = this.getNodeParameter('resource', 0) as string;
 		const operation = this.getNodeParameter('operation', 0) as string;
 
+		const executeAllFunc = resourceBuilder.getExecuteAll(resource, operation);
+		if (executeAllFunc) {
+			try {
+				return await executeAllFunc.call(this);
+			} catch (error) {
+				if (this.continueOnFail()) {
+					return [
+						this.helpers.constructExecutionMetaData(
+							this.helpers.returnJsonArray({
+								error: getErrorMessage(error),
+							}),
+							{ itemData: { item: 0 } },
+						),
+					];
+				}
+				throw error;
+			}
+		}
+
 		const callFunc = resourceBuilder.getCall(resource, operation);
 
 		if (!callFunc) {
@@ -395,11 +560,11 @@ export class FeishuNode implements INodeType {
 		}
 
 		// 获取批次配置
-		const batchConfig = getBatchConfig(this);
+		const batchConfig = getBatchConfig(this, operation);
 
-		// 根据是否显式设置了 Batching 选项来选择执行策略：
-		// - enabled === false（默认，未添加 Batching）：串行模式，逐个执行
-		// - enabled === true（添加了 Batching）：并发模式，每批请求同时发送
+		// 根据操作与 Batching 选项选择执行策略：
+		// - Upsert：默认并发批处理，约 10 次/秒
+		// - 其他操作：显式添加 Batching 后启用并发；否则串行
 		if (batchConfig.enabled) {
 			// 并发模式：类似 HttpRequest 节点
 			return executeParallel(this, items, callFunc, batchConfig, resource, operation);

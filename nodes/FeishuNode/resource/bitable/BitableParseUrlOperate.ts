@@ -1,6 +1,6 @@
 import { IDataObject, IExecuteFunctions, INodeProperties } from 'n8n-workflow';
 import { ResourceOperations } from '../../../help/type/IResource';
-import RequestUtils from '../../../help/utils/RequestUtils';
+import BitableUrlUtils from '../../../help/utils/BitableUrlUtils';
 import { batchingOption, timeoutOption } from '../../../help/utils/sharedOptions';
 
 const BitableParseUrlOperate: ResourceOperations = {
@@ -26,40 +26,11 @@ const BitableParseUrlOperate: ResourceOperations = {
 	] as INodeProperties[],
 	async call(this: IExecuteFunctions, index: number): Promise<IDataObject> {
 		const url = this.getNodeParameter('url', index, '') as string;
-		let data: IDataObject = {
-			app_token: null,
-			table_id: null,
-			view_id: null,
-		};
-		let matches = url.match(/\/base\/(.*?)(\?|$)/);
-		if (matches) {
-			data.app_token = matches[1];
-		} else {
-			matches = url.match(/\/wiki\/(.*?)(\?|$)/);
-			if (matches) {
-				let wikiToken = matches[1];
-				// wiki 开头需要处理
-				const res = (await RequestUtils.request.call(this, {
-					method: 'GET',
-					url: '/open-apis/wiki/v2/spaces/get_node',
-					qs: {
-						token: wikiToken,
-						obj_type: 'wiki',
-					},
-				})) as { node?: { obj_token?: string } };
-				data.app_token = res?.node?.obj_token;
-			}
-		}
-		matches = url.match(/table=(.*?)(&|$)/);
-		if (matches) {
-			data.table_id = matches[1];
-		}
-		matches = url.match(/view=(.*?)(&|$)/);
-		if (matches) {
-			data.view_id = matches[1];
-		}
+		const options = this.getNodeParameter('options', index, {}) as { timeout?: number };
 
-		return data;
+		return {
+			...(await BitableUrlUtils.parseBitableUrl(this, url, options.timeout)),
+		};
 	},
 };
 

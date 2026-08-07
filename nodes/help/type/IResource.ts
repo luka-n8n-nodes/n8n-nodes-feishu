@@ -27,6 +27,13 @@ export type OperationCallFunction = (
 ) => Promise<OperationResult>;
 
 /**
+ * 跨输入项批量执行函数类型
+ */
+export type OperationExecuteAllFunction = (
+	this: IExecuteFunctions,
+) => Promise<INodeExecutionData[][]>;
+
+/**
  * 资源操作定义
  */
 export type ResourceOperations = INodePropertyOptions & {
@@ -34,6 +41,8 @@ export type ResourceOperations = INodePropertyOptions & {
 	options: INodeProperties[];
 	/** 操作执行函数 */
 	call?: OperationCallFunction;
+	/** 跨输入项批量执行函数 */
+	executeAll?: OperationExecuteAllFunction;
 	/** 排序顺序，默认 100 */
 	order?: number;
 };

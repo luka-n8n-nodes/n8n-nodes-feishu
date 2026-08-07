@@ -15,6 +15,10 @@ export default [
 			'n8n-nodes-base/cred-class-field-documentation-url-missing': 'off',
 			'n8n-nodes-base/node-param-default-missing': 'off',
 			'n8n-nodes-base/node-param-collection-type-unsorted-items': 'off',
+			'n8n-nodes-base/node-param-fixed-collection-type-unsorted-items': 'off',
+			'n8n-nodes-base/node-param-display-name-wrong-for-dynamic-options': 'off',
+			'n8n-nodes-base/node-param-default-wrong-for-options': 'off',
+			'n8n-nodes-base/node-param-description-wrong-for-dynamic-options': 'off',
 
 			// 禁用 TypeScript 严格规则
 			'@typescript-eslint/no-explicit-any': 'off',

@@ -3,6 +3,7 @@ import {
 	IResource,
 	ResourceOperations,
 	OperationCallFunction,
+	OperationExecuteAllFunction,
 	ResourceOptionWithoutOperations,
 	OperationOptionWithoutDetails,
 } from '../type/IResource';
@@ -90,6 +91,7 @@ class ResourceBuilder {
 			action: item.action || item.name || '',
 			options: null,
 			call: undefined,
+			executeAll: undefined,
 			order: undefined,
 		}));
 
@@ -143,13 +145,23 @@ class ResourceBuilder {
 	 * @returns 操作执行函数或 undefined
 	 */
 	getCall(resourceName: string, operateName: string): OperationCallFunction | undefined {
+		return this.getOperation(resourceName, operateName)?.call;
+	}
+
+	getExecuteAll(
+		resourceName: string,
+		operateName: string,
+	): OperationExecuteAllFunction | undefined {
+		return this.getOperation(resourceName, operateName)?.executeAll;
+	}
+
+	getOperation(resourceName: string, operateName: string): ResourceOperations | undefined {
 		const resource = this.resources.find((item) => item.value === resourceName);
 		if (!resource) {
 			return undefined;
 		}
 
-		const operate = resource.operations.find((item) => item.value === operateName);
-		return operate?.call;
+		return resource.operations.find((item) => item.value === operateName);
 	}
 }
 
