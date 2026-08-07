@@ -1,6 +1,6 @@
 {
   "name": "@luka-cat-mimi/n8n-nodes-feishu",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "飞书 n8n 社区节点，140+ API 集成，支持 WebSocket/Webhook 触发与多维表格增强操作",
   "keywords": [
     "n8n",
