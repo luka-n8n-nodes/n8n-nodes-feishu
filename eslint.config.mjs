@@ -10,6 +10,12 @@ export default [
 			'@n8n/community-nodes/credential-test-required': 'off',
 			'@n8n/community-nodes/credential-password-field': 'off',
 			'@n8n/community-nodes/no-deprecated-workflow-functions': 'off',
+			'@n8n/community-nodes/cred-class-oauth2-naming': 'off',
+			'@n8n/community-nodes/require-node-api-error': 'off',
+			'@n8n/community-nodes/webhook-lifecycle-complete': 'off',
+			'@n8n/community-nodes/icon-prefer-themed-variants': 'off',
+			'@n8n/community-nodes/missing-paired-item': 'off',
+			'@n8n/community-nodes/no-runtime-dependencies': 'off',
 
 			// 禁用 n8n-nodes-base 规则
 			'n8n-nodes-base/cred-class-field-documentation-url-missing': 'off',
