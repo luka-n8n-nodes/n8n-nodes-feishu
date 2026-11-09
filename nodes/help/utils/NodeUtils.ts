@@ -134,6 +134,45 @@ class NodeUtils {
 		// 其他类型直接返回
 		return text as T;
 	}
+
+	/**
+	 * 解析字符串列表，支持数组、JSON 数组字符串、逗号分隔字符串
+	 * @param input 原始输入
+	 * @param fieldName 字段名称，用于错误提示
+	 * @returns 去空后的字符串数组
+	 */
+	static parseStringList(input: unknown, fieldName = '列表'): string[] {
+		if (input === undefined || input === null || input === '') {
+			return [];
+		}
+
+		if (Array.isArray(input)) {
+			return input.map((id) => String(id).trim()).filter((id) => id);
+		}
+
+		const text = String(input).trim();
+		if (!text) {
+			return [];
+		}
+
+		if (text.startsWith('[')) {
+			try {
+				const parsed = JSON.parse(text);
+				if (!Array.isArray(parsed)) {
+					throw new Error('JSON 格式错误，期望数组');
+				}
+				return parsed.map((id: unknown) => String(id).trim()).filter((id: string) => id);
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				throw new Error(`${fieldName} JSON 格式解析失败: ${errorMessage}`);
+			}
+		}
+
+		return text
+			.split(',')
+			.map((id) => id.trim())
+			.filter((id) => id);
+	}
 }
 
 export default NodeUtils;
