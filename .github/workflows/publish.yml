@@ -85,7 +85,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        # Skip dependency install scripts: the native isolated-vm module (pulled in by
+        # n8n-workflow) is only used inside n8n at runtime and fails to compile on Node
+        # versions without a prebuilt binary. Lint and build do not need it.
+        run: npm ci --ignore-scripts
 
       - name: Release
         # Publishes to npm with a provenance attestation (requires id-token: write above).
