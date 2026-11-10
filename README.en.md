@@ -1,318 +1,97 @@
-# @luka-cat-mimi/n8n-nodes-feishu
+# Feishu × n8n automation nodes
 
 [简体中文](./README.md) | **English**
 
-> 🚀 Powerful Feishu community nodes for n8n, with 140+ API integrations covering WebSocket / Webhook event subscriptions, enhanced Bitable operations (field mapping, conditional branches, and Upsert), Wiki, Documents, Messages, Calendar, Contacts, Directory, and Drive. Built-in automatic pagination, batching, and timeout management help you handle enterprise automation workflows.
+Connect Feishu to n8n to automate notifications, table updates, documents, and calendars. Start workflows from Feishu events, or read and update Feishu data within a workflow. The package covers **11 resources and 140+ operations**.
 
-Feishu community nodes for n8n, providing integrations with the Feishu Open Platform APIs.
+Package: `@luka-cat-mimi/n8n-nodes-feishu`. These are community-maintained nodes that you install in n8n.
 
-> This project builds on [n8n-nodes-feishu-lite](https://github.com/other-blowsnow/n8n-nodes-feishu-lite). Thank you to the original author for their open-source contributions!
+[Use cases](#use-cases) · [Choose a node](#nodes) · [Get started](#start) · [Highlights](#features) · [Resources](#resources) · [Guides](#guides)
 
-## Installation
+<a id="use-cases"></a>
 
-See: https://docs.n8n.io/integrations/community-nodes/installation/
+## What can you build?
 
-Package name: `@luka-cat-mimi/n8n-nodes-feishu`
+These are workflow ideas you can assemble by configuring nodes, credentials, and permissions:
 
-## Features
+| Goal | Example workflow |
+| --- | --- |
+| Remind a team about outstanding tasks | Schedule → Find pending Bitable records → Send a Feishu group message |
+| Sync business data into a table | Receive business data → Match an order number → Update an existing record or create one (Upsert) |
+| Organize incoming information | Receive a Feishu message → Extract relevant content → Create a document or task |
 
-### 🚀 Feishu Trigger
+<a id="nodes"></a>
 
-Subscribe to Feishu events through a **persistent WebSocket connection** and automatically start workflows when events occur.
+## Choose a node
 
-**Key features:**
+The package provides four node types. **Select Resource and Operation inside the 「飞书」 node to send messages, work with tables, and perform other actions.** You do not install each operation separately. Chinese labels below match the node UI.
 
-- Subscribe to **all events** by default, or select specific event types
-- Two response modes:
-  - **Immediately**: Respond as soon as the event is received
-  - **Using '飞书响应' Node**: Use the Feishu response node to return a custom synchronous response (fixed 3-second timeout)
+| Node label in the UI | Purpose | When to use it |
+| --- | --- | --- |
+| 飞书 (Feishu) | Perform a Feishu operation within a workflow | Send messages, query tables, create documents, and more |
+| 飞书 Trigger | Receive events over a persistent WebSocket connection | Use Feishu's persistent-connection subscription mode without a public callback URL |
+| 飞书 Webhook Trigger | Receive events at a callback URL | Use server callbacks with an address reachable by Feishu |
+| 飞书响应 (Feishu Response) | Return a result for the current event or callback | Respond synchronously to interactions such as card actions; use the Feishu node to send chat messages |
 
-> ⚠️ Due to Feishu API limitations, only one Trigger can run per Feishu app at a time.
+Both triggers require event subscriptions in the Feishu developer console. By default, the node does not filter incoming event types; **it does not subscribe to all events in the console for you**. See [event setup](./docs/en/advanced.md#triggers).
 
-### 🌐 Feishu Webhook Trigger ✨ New
+<a id="start"></a>
 
-Receive Feishu event callbacks through **Webhook**, for the subscription mode that sends callbacks to your developer server.
+## Get started
 
-**Key features:**
+1. **Install the package**: On self-hosted n8n, enter `@luka-cat-mimi/n8n-nodes-feishu` under `Settings → Community nodes → Install`. Installation requires administrator access. See [installation](./docs/en/getting-started.md#installation) for alternatives and Cloud conditions.
+2. **Connect a Feishu app**: Create an app, grant the required permissions, and configure credentials in n8n. The first-workflow example uses app-level credentials; see [credential choices](./docs/en/getting-started.md#credentials).
+3. **Run your first workflow**: Follow [send a group message](./docs/en/getting-started.md#first-workflow) to build “Manual Trigger → Feishu text message.” It includes finding a chat ID, entering parameters, and checking the result.
 
-- Automatically handle URL verification (`url_verification`) and decrypt encrypted payloads
-- Support Verification Token validation and app_id matching
-- Subscribe to **all events** by default, or select specific event types
-- Two response modes (using the same labels as the WebSocket trigger):
-  - **Immediately**: Respond as soon as the event is received
-  - **Using '飞书响应' Node**: Use the Feishu response node to return a custom synchronous response
+Successful authentication does not grant access to every resource. Documents and tables also require the relevant API permissions and resource access. An organization administrator may need to help with app setup and approval.
 
-> Configure the Webhook URL generated by the node under the event and callback subscription settings in the Feishu developer console.
+<a id="features"></a>
 
-### 🔄 Feishu Response
+## Highlights
 
-Use with **Feishu Trigger** or **Feishu Webhook Trigger** to respond synchronously to Feishu events, such as card interactions and link preview callbacks.
+| Feature | What it helps with | Boundaries |
+| --- | --- | --- |
+| Enhanced Bitable operations | Map fields visually; query or delete by conditions, update by record ID, or upsert | Upsert updates only the first match when multiple records match; use a business-unique field |
+| Automatic pagination (Return All) | Retrieve all matching results without managing page tokens | Supported by selected operations, off by default, and limited to the current identity's access |
+| Two ways to receive events | Start workflows through WebSocket or Webhook | Console setup, network requirements, and response behavior differ |
+| Batching and timeouts | Control how input items are scheduled and set request timeouts on supported operations | Batch size is not an API request count or a throughput guarantee |
+| Directory and file handling | Recursive queries on selected directories, multipart uploads, and import/export task polling | Capabilities depend on the operation; check the reference |
 
-**Key features:**
+See the [advanced guide](./docs/en/advanced.md) for parameters, inputs, outputs, and limitations.
 
-- Two synchronous response modes:
-  - **WebSocket synchronous response**: Use with Feishu Trigger (the persistent-connection trigger)
-  - **Webhook synchronous response**: Use with Feishu Webhook Trigger
-- Support **No Data** (an empty response body) or **JSON** (a custom JSON response)
-- The node output matches the JSON returned to Feishu, without additional wrapper fields
-- Optionally enable a response output branch
+<a id="resources"></a>
 
----
+## Resource coverage
 
-### Wiki (13)
+| Resource | What you can work with | Operations |
+| --- | --- | ---: |
+| [Wiki](./docs/en/operations.md#wiki_spaces) | Spaces, members, page nodes, and hierarchies | 13 |
+| [Chat management](./docs/en/operations.md#chat) | Chat details, members, and administrators | 12 |
+| [Contacts](./docs/en/operations.md#user) | Users, departments, and direct department members | 6 |
+| [Directory](./docs/en/operations.md#directory) | Employee lookup, filtering, and updates | 4 |
+| [Tasks](./docs/en/operations.md#task) | Tasks and task members | 6 |
+| [Documents](./docs/en/operations.md#doc) | Document content, text, and blocks | 11 |
+| [Bitable](./docs/en/operations.md#bitable) | Apps, tables, views, fields, and records | 34 |
+| [Messages](./docs/en/operations.md#message) | Messages, cards, images, and files | 22 |
+| [Calendar](./docs/en/operations.md#calendar) | Calendars, events, attendees, and meeting chats | 16 |
+| [Aily](./docs/en/operations.md#aily) | Aily skills and files | 5 |
+| [Drive](./docs/en/operations.md#space) | Folders, files, media, imports, and exports | 18 |
 
-- List knowledge spaces
-- Get knowledge space information
-- Update knowledge space settings
-- Add a knowledge space member
-- Remove a knowledge space member
-- List knowledge space members
-- Create a knowledge space node
-- **Create knowledge space nodes with a dynamic hierarchy (custom operation)** ✨ New
-- Copy a knowledge space node
-- Get knowledge space node information
-- List child nodes of a knowledge space node ✨ Supports recursive retrieval
-- Move a knowledge space node
-- Update a knowledge space node title
+The full catalogue contains **147 operations**, including composed operations that call multiple APIs. This is not a count of distinct API endpoints.
 
-### Chat Management (12)
+<a id="guides"></a>
 
-- **Create a chat** ✨ New
-- **Update chat information** ✨ New
-- **Disband a chat** ✨ New
-- Get chat information
-- List chats that a user or bot belongs to
-- Search chats visible to a user or bot
-- List chat members
-- Add users or bots to a chat
-- Remove chat members
-- Check whether a user or bot is in a chat
-- Assign chat administrators
-- Remove chat administrators
+## Detailed guides
 
-### Contacts (6)
+- [Getting started](./docs/en/getting-started.md): Installation, credentials, permissions, and a first workflow.
+- [Operation reference](./docs/en/operations.md): All operation labels, pagination support, and confirmed credential restrictions.
+- [Advanced guide](./docs/en/advanced.md): Events, synchronous responses, field mapping, Upsert, batching, and troubleshooting.
+- [Changelog](./CHANGELOG.md): Version history.
 
-- Get user information
-- Batch get user information
-- Get user IDs by phone number or email address
-- List child departments ✨ New (supports recursive retrieval and tree or flat output)
-- List users directly under a department ✨ New
-- Search users ✨ New
+For source development, start with the `dev`, `build`, and `lint` scripts in [package.json](./package.json) and the [CI configuration](./.github/workflows/ci.yml). See [compatibility notes](./docs/en/getting-started.md#compatibility) before choosing an environment.
 
-### Directory (4) ✨ New
+## Credits, license, and support
 
-- Update employee information (supports localized names / workstations)
-- Batch get employee information (supports selecting multiple query fields)
-- List employees (supports filters, multiple query fields, and Return All)
-- Search employee information (supports multiple query fields and Return All)
+This project builds on [n8n-nodes-feishu-lite](https://github.com/other-blowsnow/n8n-nodes-feishu-lite). Thank you to the original author for the open-source contribution.
 
-### Tasks (6)
-
-- Create a task
-- Get task details
-- Update a task
-- Delete a task
-- Add task members
-- Remove task members
-
-### Documents (11)
-
-- Create a document
-- Get basic document information
-- Get document plain-text content
-- Get document content
-- Get all document blocks
-- Get block content
-- Create a block
-- Create nested blocks
-- Update block content
-- Delete a block
-- Convert Markdown/HTML content to document blocks
-
-### Bitable (34)
-
-- Bitable - Delete row(s) ✨ New
-- Bitable - Get row(s) ✨ New
-- Bitable - If row exists ✨ New
-- Bitable - If row does not exist ✨ New
-- Bitable - Insert row ✨ New
-- Bitable - Update row(s) ✨ New
-- Bitable - Upsert row(s) ✨ New
-- Bitable - Create a Data Table ✨ New
-- Parse a Bitable URL ✨ Enhanced
-- Create a Bitable app
-- Copy a Bitable app
-- Get Bitable app metadata
-- Update Bitable app metadata
-- List tables
-- Add a table
-- Update a table
-- Delete a table
-- List views
-- Get a view
-- Add a view
-- Update a view
-- Delete a view
-- Search records
-- Get a record by ID
-- Add a record
-- Update a record
-- Delete a record
-- Batch add records
-- Batch update records
-- Batch delete records
-- List fields
-- Add a field
-- Update a field
-- Delete a field
-
-### Messages (22)
-
-- Send a message
-- Reply to a message
-- Edit a message
-- **Get the content of a specific message** ✨ New
-- **Get chat message history** ✨ New
-- Forward a message
-- Recall a message
-- Batch send messages
-- Batch recall messages
-- Get overall batch message progress
-- Get delivery and read counts for batch messages
-- Update a sent message card
-- Update a message card with a delay
-- Send a message card visible only to specific users
-- Delete a message card visible only to specific users
-- Send an urgent in-app notification
-- Upload an image
-- Download an image
-- Upload a file
-- Download a file
-- **Get resource files from a message** ✨ New
-- Decrypt event messages
-
-### Calendar (16)
-
-- Search calendars
-- Get calendar information
-- Get primary calendar information
-- Create a shared calendar
-- Delete a shared calendar
-- List events
-- Get an event
-- Search events
-- Create an event
-- Update an event
-- Delete an event
-- List event attendees
-- Add event attendees
-- Remove event attendees
-- Create a meeting chat
-- Unbind a meeting chat
-
-### Aily (5)
-
-- Get basic file information
-- Upload a file
-- Invoke a skill
-- List skills
-- Get skill information
-
-### Drive (18)
-
-- **Get My Space (root folder) metadata** ✨ New
-- **List files in a folder** ✨ New (supports file type filtering, recursive subfolder retrieval, and tree or flat output)
-- **Get folder metadata** ✨ New
-- **Create a folder** ✨ New
-- **Get file statistics** ✨ New
-- **Get file access records** ✨ New
-- **Search cloud documents** ✨ New
-- Upload a file (supports uploading binary files to Drive folders)
-- Multipart file upload (combines three API steps, supports large files with up to 5 concurrent uploads)
-- Download a file
-- **Import a file** ✨ New (supports importing Word/Excel/CSV/Markdown/TXT/HTML as cloud documents, with automatic task status polling)
-- Export a cloud document (automatically polls task status and downloads the file)
-- Upload media
-- **Multipart media upload** ✨ New (supports large files with up to 5 concurrent uploads)
-- **Upload media from a URL** ✨ Enhanced
-- **Download media** ✨ New (downloads media from cloud documents, such as images in spreadsheets)
-- Subscribe to cloud document events
-- Unsubscribe from cloud document events
-
-## ✨ Highlights
-
-### 🔄 Return All: Automatic Pagination
-
-The following operations support **Return All**, automatically handling pagination to retrieve all results:
-
-| Resource | Operation |
-| -------- | --------- |
-| Wiki | List knowledge spaces |
-| Wiki | List knowledge space members |
-| Wiki | List child nodes of a knowledge space node (supports recursively retrieving all child nodes) |
-| Aily | List skills |
-| Chat Management | List chats that a user or bot belongs to |
-| Chat Management | Search chats visible to a user or bot |
-| Chat Management | List chat members |
-| Bitable | Search records |
-| Bitable | Bitable - Get row(s) ✨ New |
-| Bitable | List tables ✨ New |
-| Bitable | List views ✨ New |
-| Bitable | List fields ✨ New |
-| Calendar | Search calendars ✨ New |
-| Calendar | List events ✨ New |
-| Calendar | Search events ✨ New |
-| Calendar | List event attendees ✨ New |
-| Documents | Get all document blocks ✨ New |
-| Messages | Get chat message history ✨ New |
-| Contacts | List child departments (supports recursive retrieval and tree or flat output) ✨ New |
-| Contacts | List users directly under a department ✨ New |
-| Contacts | Search users ✨ New |
-| Directory | List employees ✨ New |
-| Directory | Search employee information ✨ New |
-| Drive | List files in a folder (supports recursive retrieval and file type filtering) ✨ New |
-
-### ⏱️ Timeout and Batch Management
-
-Most operations support the following advanced options:
-
-- **Timeout**: Set the request timeout in milliseconds to prevent requests from hanging indefinitely
-- **Batching**:
-  - **Items per Batch**: Set the number of items in each batch to control request frequency
-  - **Batch Interval (ms)**: Set the delay between batches to avoid API rate limits
-
-Configure these settings under the operation's `Options` to manage Feishu API rate limits.
-
-### 📋 Enhanced Bitable Operations
-
-These custom operations provide a more convenient n8n workflow experience:
-
-| Operation | Capabilities |
-| --------- | ------------ |
-| Bitable - Delete row(s) | Find records by conditions and batch delete matching records |
-| Bitable - Get row(s) | Query records by field conditions, with Return All, sorting, field selection, and output format conversion |
-| Bitable - If row exists / If row does not exist | Conditional branches: pass input items through when the condition matches; skip them otherwise |
-| Bitable - Insert row / Update row(s) | Resource Mapper field mapping, with Auto Map, attachment uploads, and batch writes across input items |
-| Bitable - Upsert row(s) | Find records by conditions, update existing matches, or create new records when no match is found; concurrent batch processing is enabled by default (approximately 10 requests/second) |
-| Bitable - Create a Data Table | Configure initial field types and properties visually, without writing a JSON body manually |
-
-Match conditions (Match / Must Match) dynamically load the available operators based on field types. Both the Column Name or ID dropdown and the Resource Mapper field list use live field metadata.
-
-## Credential Types
-
-- **App-level credentials** - Authenticate using an App ID and App Secret
-- **User-level credentials** - Authenticate through user authorization with OAuth 2.0
-
-## Notes
-
-1. When accessing documents with app credentials, add the app as a document collaborator.
-2. Look up error codes: https://open.feishu.cn/search
-
-## 📝 License
-
-MIT License
-
-## 🆘 Support
-
-- 📧 Email: luka.cat.mimi@gmail.com
-- 🐛 [Report an issue](https://github.com/luka-n8n-nodes/n8n-nodes-feishu/issues)
+Licensed under [MIT](./LICENSE.md). [Report an issue](https://github.com/luka-n8n-nodes/n8n-nodes-feishu/issues) or email [luka.cat.mimi@gmail.com](mailto:luka.cat.mimi@gmail.com). Include the package version, n8n version, operation name, and sanitized error details.

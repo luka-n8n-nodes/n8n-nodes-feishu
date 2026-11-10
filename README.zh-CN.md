@@ -1,5 +1,7 @@
-# @luka-cat-mimi/n8n-nodes-feishu
+# 中文文档
 
-完整中文文档现位于默认的 [README.md](./README.md)，原有简介、功能列表和使用说明均已恢复。
+中文首页位于 [README.md](./README.md)。
+
+[入门指南](./docs/zh-CN/getting-started.md) · [操作参考](./docs/zh-CN/operations.md) · [进阶指南](./docs/zh-CN/advanced.md)
 
 [简体中文](./README.md) | [English](./README.en.md)
