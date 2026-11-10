@@ -1,307 +1,83 @@
 # @luka-cat-mimi/n8n-nodes-feishu
 
-> 🚀 功能强大的飞书 n8n 社区节点，支持 140+ API 接口集成，涵盖 WebSocket / Webhook 双模式事件监听、多维表格增强操作（字段映射、条件分支、Upsert）、知识库、云文档、消息、日历、通讯录、云空间等。内置自动分页、批次控制和超时管理，轻松应对企业级自动化场景。
+**English** | [简体中文](./README.zh-CN.md)
 
-飞书 n8n 社区节点，提供飞书开放平台 API 的集成支持。
+Feishu / Lark community nodes for n8n. The package covers 140+ Open Platform APIs, WebSocket and Webhook triggers, Bitable helpers (field mapping, conditions, upsert), and Send and Wait.
 
-> 本项目是基于 [n8n-nodes-feishu-lite](https://github.com/other-blowsnow/n8n-nodes-feishu-lite) 之上进行的二次开发，感谢原作者的开源贡献！
+This project is based on [n8n-nodes-feishu-lite](https://github.com/other-blowsnow/n8n-nodes-feishu-lite).
 
-## 安装
+## Install
 
-参考：https://docs.n8n.io/integrations/community-nodes/installation/
+See the [n8n community node installation guide](https://docs.n8n.io/integrations/community-nodes/installation/).
 
-节点名称：`@luka-cat-mimi/n8n-nodes-feishu`
+Package name: `@luka-cat-mimi/n8n-nodes-feishu`
 
-## 功能列表
+Requires Node.js 22.22 or later.
 
-### 🚀 飞书 Trigger
+## Credentials
 
-通过 **WebSocket 长连接**方式监听飞书事件，当事件发生时自动启动工作流。
+- **Feishu Tenant API**: App ID and App Secret. The node fetches a tenant access token automatically.
+- **Feishu OAuth2 API**: User-level OAuth2 (PKCE). Include `offline_access` when you need refresh tokens.
 
-**主要特点：**
+Choose China (`https://open.feishu.cn`) or International (`https://open.larksuite.com`) as the base URL.
 
-- 默认订阅**所有事件**，也可按需选择具体事件类型
-- 两种响应模式：
-  - **Immediately**：事件触发后立即响应
-  - **Using '飞书响应' Node**：配合飞书响应节点同步返回自定义响应（超时固定 3 秒）
+## Nodes
 
-> ⚠️ 由于飞书 API 限制，每个飞书应用同时只能有一个 Trigger 在运行。
+- **Feishu**: Resource/operation node for messages, chats, contacts, tasks, documents, Bitable, calendar, Aily, Drive, and wiki.
+- **Feishu Trigger**: Long-lived WebSocket event subscription. Feishu allows only one running trigger per app.
+- **Feishu Webhook Trigger**: HTTP callbacks with URL verification and optional payload decryption. Paste the generated URL into the Feishu developer console.
+- **Respond to Feishu**: Synchronous response for card actions and link previews. Use it with either trigger. The built-in Respond to Webhook node does not work with these triggers.
 
-### 🌐 飞书 Webhook Trigger ✨ 新增
+## Send and Wait
 
-通过 **Webhook** 方式接收飞书事件回调，适用于「将回调发送至开发者服务器」订阅模式。
+Message → Send and Wait for Response pauses the workflow until a user clicks Approve/Reject or submits free text. The card opens the n8n resume URL in a Feishu sidebar, so the webhook URL must be reachable from the Feishu client. If the wait expires, the workflow continues and the card buttons are not updated.
 
-**主要特点：**
+## v1 to v2 migration
 
-- 自动处理 URL 验证（`url_verification`）与加密推送解密
-- 支持 Verification Token 校验与 app_id 匹配
-- 默认订阅**所有事件**，也可按需选择具体事件类型
-- 两种响应模式（与长链接触发器文案一致）：
-  - **Immediately**：事件触发后立即响应
-  - **Using '飞书响应' Node**：配合飞书响应节点同步返回自定义响应
+v2 is an n8n-verification-oriented release:
 
-> 将节点生成的 Webhook URL 配置到飞书开放平台「事件与回调 - 订阅方式」中即可。
+- Node and credential UI are English only.
+- Document IDs (App Token, Folder Token, File Token, and similar) are plain-text fields, not password fields. Expression names are `app_id`, `folder_id`, `file_id`, `doc_id`, `node_id`, and `idempotency_key`. Re-select those fields after upgrading existing workflows. v1 used `app_toke` / `folder_toke` / `client_toke`.
+- Node versions: Feishu `2`, Feishu Webhook Trigger `2`, Respond to Feishu `2`. Internal node type names are unchanged (`feishuNode`, `feishuNodeTrigger`, `feishuWebhookTrigger`, `respondToFeishu`).
+- OAuth2 credential type name is now `feishuNodeOAuth2Api`. Recreate the OAuth2 credential if an existing workflow still references `feishuNodeOauth2Api`.
+- Runtime npm dependencies were removed. The WebSocket trigger uses the Node.js built-in WebSocket API.
 
-### 🔄 飞书响应
+## Features
 
-配合**飞书 Trigger** 或 **飞书 Webhook Trigger** 使用，用于同步响应飞书事件（如卡片交互、链接预览回调）。
+### Triggers
 
-**主要特点：**
+- Subscribe to all events or a specific list
+- Immediate response, or a synchronous response through Respond to Feishu (3s timeout on the WebSocket path)
 
-- 两种同步响应模式：
-  - **长链接同步响应**：配合「飞书 Trigger」（长链接触发器）使用
-  - **Webhook 同步响应**：配合「飞书 Webhook Trigger」（Webhook 触发器）使用
-- 响应内容支持 **No Data**（空响应体）或 **JSON**（自定义 JSON 响应）
-- 节点输出与返回给飞书的 JSON 内容一致，不再额外包裹字段
-- 可选启用响应输出分支
+### Resources
 
----
+- Wiki (13)
+- Chat (12)
+- Contact (6)
+- Task (6)
+- Document (11)
+- Bitable (34), including upsert, insert, update rows, and if-row-exists branches
+- Message (23), including Send and Wait
+- Calendar (16)
+- Aily (5)
+- Drive (18)
 
-### 知识库 (13)
+Most list operations support Return All, Limit, batching, and timeout options.
 
-- 获取知识空间列表
-- 获取知识空间信息
-- 更新知识空间设置
-- 添加知识空间成员
-- 删除知识空间成员
-- 获取知识空间成员列表
-- 创建知识空间节点
-- **创建动态层级的知识库空间节点 (自定义封装)** ✨ 新增
-- 创建知识空间节点副本
-- 获取知识空间节点信息
-- 获取知识空间子节点列表 ✨支持递归获取子节点
-- 移动知识空间节点
-- 更新知识空间节点标题
+## Development
 
-### 群组管理 (12)
+```bash
+npm install
+npm run lint
+npm run build
+npm test
+npm run dev
+```
 
-- **创建群** ✨ 新增
-- **更新群信息** ✨ 新增
-- **解散群** ✨ 新增
-- 获取群信息
-- 获取用户或机器人所在的群列表
-- 搜索对用户或机器人可见的群列表
-- 获取群成员列表
-- 将用户或机器人拉入群聊
-- 移出群成员
-- 判断用户或机器人是否在群里
-- 指定群管理员
-- 删除群管理员
+## License
 
-### 通讯录 (6)
+MIT
 
-- 获取用户信息
-- 批量获取用户信息
-- 通过手机号或邮箱获取用户 ID
-- 获取子部门列表 ✨ 新增（支持递归获取、树形/扁平数据结构）
-- 获取部门直属用户列表 ✨ 新增
-- 搜索用户 ✨ 新增
+## Issues
 
-### 任务 (6)
-
-- 创建任务
-- 获取任务详情
-- 更新任务
-- 删除任务
-- 添加任务成员
-- 移除任务成员
-
-### 云文档 (11)
-
-- 创建文档
-- 获取文档基本信息
-- 获取文档纯文本内容
-- 获取云文档内容
-- 获取文档所有块
-- 获取块的内容
-- 创建块
-- 创建嵌套块
-- 更新块的内容
-- 删除块
-- Markdown/HTML 内容转换为文档块
-
-### 多维表格 (34)
-
-- 多维表格 - Delete row(s) ✨ 新增
-- 多维表格 - Get row(s) ✨ 新增
-- 多维表格 - If row exists ✨ 新增
-- 多维表格 - If row does not exist ✨ 新增
-- 多维表格 - Insert row ✨ 新增
-- 多维表格 - Update row(s) ✨ 新增
-- 多维表格 - Upsert row(s) ✨ 新增
-- 多维表格 - Create a Data Table ✨ 新增
-- 解析多维表格地址 ✨ 增强
-- 创建多维表格
-- 复制多维表格
-- 获取多维表格元数据
-- 更新多维表格元数据
-- 列出数据表
-- 新增数据表
-- 更新数据表
-- 删除数据表
-- 列出视图
-- 获取视图
-- 新增视图
-- 更新视图
-- 删除视图
-- 查询记录
-- 查询记录-通过记录ID
-- 新增记录
-- 更新记录
-- 删除记录
-- 批量新增记录
-- 批量更新记录
-- 批量删除记录
-- 列出字段
-- 新增字段
-- 更新字段
-- 删除字段
-
-### 消息 (22)
-
-- 发送消息
-- 回复消息
-- 编辑消息
-- **获取指定消息的内容** ✨ 新增
-- **获取会话历史消息** ✨ 新增
-- 转发消息
-- 撤回消息
-- 批量发送消息
-- 批量撤回消息
-- 查询批量消息整体进度
-- 查询批量消息推送和阅读人数
-- 更新已发送的消息卡片
-- 延时更新消息卡片
-- 发送仅特定人可见的消息卡片
-- 删除仅特定人可见的消息卡片
-- 发送应用内加急
-- 上传图片
-- 下载图片
-- 上传文件
-- 下载文件
-- **获取消息中的资源文件** ✨ 新增
-- 解密事件消息
-
-### 日历 (16)
-
-- 搜索日历
-- 查询日历信息
-- 查询主日历信息
-- 创建共享日历
-- 删除共享日历
-- 获取日程列表
-- 获取日程
-- 搜索日程
-- 创建日程
-- 更新日程
-- 删除日程
-- 获取日程参与人列表
-- 添加日程参与人
-- 删除日程参与人
-- 创建会议群
-- 解绑会议群
-
-### Aily (5)
-
-- 读取文件基础信息
-- 文件上传
-- 调用技能
-- 查询技能列表
-- 获取技能信息
-
-### 云空间 (18)
-
-- **获取我的空间（根文件夹）元数据** ✨ 新增
-- **获取文件夹中的文件清单** ✨ 新增（支持文件类型过滤、递归获取子文件夹、树形/扁平数据结构）
-- **获取文件夹元数据** ✨ 新增
-- **新建文件夹** ✨ 新增
-- **获取文件统计信息** ✨ 新增
-- **获取文件访问记录** ✨ 新增
-- **搜索云文档** ✨ 新增
-- 上传文件（支持二进制文件上传到云空间文件夹）
-- 分片上传文件（三合一接口，支持大文件分片上传，5 并发加速）
-- 下载文件
-- **导入文件** ✨ 新增（支持 Word/Excel/CSV/Markdown/TXT/HTML 导入为云文档，自动轮询任务状态）
-- 导出云文档（自动轮询任务状态并下载文件）
-- 上传素材
-- **分片上传素材** ✨ 新增（支持大文件分片上传，5并发加速）
-- **上传素材通过Url** ✨ 增强
-- **下载素材** ✨ 新增（下载各类云文档中的素材，例如电子表格中的图片）
-- 订阅云文档事件
-- 取消云文档事件订阅
-
-## ✨ 特别之处
-
-### 🔄 Return All 自动分页
-
-以下接口支持 **Return All** 功能，自动处理分页获取全部数据：
-
-| 模块     | 接口名称                                                 |
-| -------- | -------------------------------------------------------- |
-| 知识库   | 获取知识空间列表                                         |
-| 知识库   | 获取知识空间成员列表                                     |
-| 知识库   | 获取知识空间子节点列表（支持递归获取所有子节点）         |
-| Aily     | 查询技能列表                                             |
-| 群组管理 | 获取用户或机器人所在的群列表                             |
-| 群组管理 | 搜索对用户或机器人可见的群列表                           |
-| 群组管理 | 获取群成员列表                                           |
-| 多维表格 | 查询记录                                                 |
-| 多维表格 | 多维表格 - Get row(s) ✨ 新增                            |
-| 多维表格 | 列出数据表 ✨ 新增                                       |
-| 多维表格 | 列出视图 ✨ 新增                                         |
-| 多维表格 | 列出字段 ✨ 新增                                         |
-| 日历     | 搜索日历 ✨ 新增                                         |
-| 日历     | 获取日程列表 ✨ 新增                                     |
-| 日历     | 搜索日程 ✨ 新增                                         |
-| 日历     | 获取日程参与人列表 ✨ 新增                               |
-| 云文档   | 获取文档所有块 ✨ 新增                                   |
-| 消息     | 获取会话历史消息 ✨ 新增                                 |
-| 通讯录   | 获取子部门列表（支持递归获取、树形/扁平数据结构）✨ 新增 |
-| 通讯录   | 获取部门直属用户列表 ✨ 新增                             |
-| 通讯录   | 搜索用户 ✨ 新增                                         |
-| 云空间   | 获取文件夹中的文件清单（支持递归获取、文件类型过滤）✨ 新增 |
-
-### ⏱️ 超时与批次管理
-
-大部分接口支持以下高级选项：
-
-- **Timeout（超时时间）**：设置请求超时时间（毫秒），避免请求长时间挂起
-- **Batching（批次管理）**：
-  - **Items per Batch**：每批处理的数量，用于控制请求频率
-  - **Batch Interval (ms)**：每批请求之间的等待时间，避免触发 API 限流
-
-这些功能可在接口的 `Options` 选项中配置，有效应对飞书 API 的频率限制。
-
-### 📋 多维表格增强操作
-
-以下自定义封装操作提供更友好的 n8n 工作流体验：
-
-| 操作 | 主要能力 |
-| ---- | -------- |
-| 多维表格 - Delete row(s) | 按条件查找并批量删除匹配记录 |
-| 多维表格 - Get row(s) | 按字段条件查询记录，支持 Return All、排序、字段筛选和数据格式转换 |
-| 多维表格 - If row exists / If row does not exist | 条件分支：匹配时透传输入项，不匹配时跳过 |
-| 多维表格 - Insert row / Update row(s) | Resource Mapper 字段映射，支持 Auto Map、附件上传和跨输入项批量写入 |
-| 多维表格 - Upsert row(s) | 按条件查找记录，找到则更新、找不到则新建；默认并发批处理（约 10 次/秒） |
-| 多维表格 - Create a Data Table | 可视化配置初始字段类型及属性，无需手写 JSON body |
-
-匹配条件（Match / Must Match）会根据字段类型动态加载可用运算符，Column Name or ID 下拉列表与 Resource Mapper 字段列表均来自实时字段元数据。
-
-## 凭证类型
-
-- **应用级别凭证** - 使用 App ID 和 App Secret 进行认证
-- **用户级别凭证** - 使用 OAuth 2.0 进行用户授权认证
-
-## 注意事项
-
-1. 使用应用凭证访问文档时，需要在文档中将应用添加为协作者
-2. 错误码查询：https://open.feishu.cn/search
-
-## 📝 许可证
-
-MIT License
-
-## 🆘 支持
-
-- 📧 邮箱：luka.cat.mimi@gmail.com
-- 🐛 [问题反馈](https://github.com/luka-n8n-nodes/n8n-nodes-volcengine/issues)
+Report bugs or request features via [GitHub Issues](https://github.com/luka-n8n-nodes/n8n-nodes-feishu/issues).
